@@ -222,6 +222,9 @@ RedBit.Slack.Management/
 │   └── WhoAmICommand.cs            # Authentication status handler
 ├── Configuration/
 │   └── SlackOptions.cs             # Strongly-typed configuration model
+├── Extensions/
+│   ├── JsonElementExtensions.cs       # Core JSON utility extensions (GetStringOrNull, etc.)
+│   └── JsonElementSlackExtensions.cs  # Slack model parsing extensions (ToSlackChannel, etc.)
 ├── Models/
 │   ├── SlackApiException.cs        # Slack API error handling
 │   ├── SlackAuthResponse.cs        # Authentication response model

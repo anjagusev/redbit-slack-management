@@ -146,12 +146,18 @@ Use [SlackApiException](Models/SlackApiException.cs) for Slack-specific errors. 
 [SlackApiClient](Services/SlackApiClient.cs) validates `ok: true` in responses via `AssertOk()`. All API calls return `JsonElement` for manual parsing.
 
 ### JSON Response Handling
-Custom extension methods in [SlackApiClient.cs](Services/SlackApiClient.cs#L155-L182):
-- `GetPropertyOrNull()`: Safe property access
-- `GetStringOrNull()`: Extract string values
-- `GetBoolOrNull()`: Extract boolean values
+Extension methods for JSON parsing are in the `Extensions/` folder using C# 14 extension block syntax:
 
-Always clone `JsonElement` before disposing `JsonDocument` (line 120).
+**Core utilities** in [JsonElementExtensions.cs](Extensions/JsonElementExtensions.cs):
+- `GetPropertyOrNull()`: Safe property access
+- `GetStringOrNull()`, `GetBoolOrNull()`, `GetIntOrNull()`, `GetLongOrNull()`: Extract typed values
+- `GetStringArrayOrEmpty()`: Extract string arrays
+
+**Model parsing** in [JsonElementSlackExtensions.cs](Extensions/JsonElementSlackExtensions.cs):
+- `ToSlackChannel()`, `ToSlackMessage()`, `ToSlackUser()`: Parse Slack models from JsonElement
+- `ToChannelTopic()`, `ToChannelPurpose()`, etc.: Parse nested nullable models from JsonElement?
+
+Always clone `JsonElement` before disposing `JsonDocument` (see SlackApiClient.CallApiAsync).
 
 ### Service Layer
 - [SlackApiClient](Services/SlackApiClient.cs): All Slack Web API calls (auth.test, conversations.*, files.*)

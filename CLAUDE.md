@@ -189,11 +189,28 @@ rootCommand.AddCommand(myCommand);
 ```
 
 ### Adding New API Methods
-Add method to `SlackApiClient`, use `CallApiAsync()` with custom JSON parsing via `GetPropertyOrNull()`, `GetStringOrNull()`, `GetBoolOrNull()` extensions.
+1. Add method to `SlackApiClient`, use `CallApiAsync()` for the HTTP call
+2. Use JSON utility extensions from `Extensions/JsonElementExtensions.cs`:
+   - `GetPropertyOrNull()`, `GetStringOrNull()`, `GetBoolOrNull()`, `GetIntOrNull()`, `GetLongOrNull()`, `GetStringArrayOrEmpty()`
+3. Use model parsing extensions from `Extensions/JsonElementSlackExtensions.cs`:
+   - `ToSlackChannel()`, `ToSlackMessage()`, `ToSlackUser()`, etc.
+4. If parsing a new model type, add a `ToSlackXxx()` extension method using C# 14 extension block syntax:
+
+```csharp
+extension(JsonElement element)
+{
+    public SlackNewModel ToSlackNewModel() => new(
+        Id: element.GetStringOrNull("id") ?? string.Empty,
+        Name: element.GetStringOrNull("name")
+    );
+}
+```
 
 ## Key Files
 
 - `Program.cs` - Entry point, DI setup, token resolution, command routing
 - `Services/SlackApiClient.cs` - Slack Web API wrapper
+- `Extensions/JsonElementExtensions.cs` - Core JSON utility extensions for `JsonElement`
+- `Extensions/JsonElementSlackExtensions.cs` - Slack model parsing extensions (`ToSlackChannel()`, `ToSlackMessage()`, etc.)
 - `Services/TokenStorage/FileTokenStore.cs` - Persistent OAuth token storage
 - `Configuration/SlackOptions.cs` - Strongly-typed configuration model
