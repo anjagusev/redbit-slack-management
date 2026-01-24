@@ -5,22 +5,21 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using RedBit.Slack.Management.Configuration;
 
-namespace RedBit.Slack.Management.Services;
+namespace RedBit.CommandLine.OAuth;
 
 /// <summary>
-/// Local HTTPS server using Kestrel that listens for OAuth callbacks from Slack.
+/// Local HTTPS server using Kestrel that listens for OAuth callbacks.
 /// Kestrel automatically uses dev certificates without manual binding.
 /// </summary>
 public class OAuthCallbackListener : IDisposable
 {
-    private readonly SlackOptions _options;
+    private readonly OAuthCallbackOptions _options;
     private readonly ILogger<OAuthCallbackListener> _logger;
     private bool _disposed;
 
     public OAuthCallbackListener(
-        IOptions<SlackOptions> options,
+        IOptions<OAuthCallbackOptions> options,
         ILogger<OAuthCallbackListener> logger)
     {
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
@@ -31,15 +30,18 @@ public class OAuthCallbackListener : IDisposable
     /// Starts listening and waits for the OAuth callback.
     /// Returns the authorization code and validates the state parameter.
     /// </summary>
+    /// <param name="expectedState">The expected state parameter for CSRF validation.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result of the OAuth callback.</returns>
     public async Task<OAuthCallbackResult> WaitForCallbackAsync(
         string expectedState,
         CancellationToken cancellationToken = default)
     {
-        var port = _options.CallbackPort;
+        var port = _options.Port;
         var resultTcs = new TaskCompletionSource<OAuthCallbackResult>();
 
         var builder = WebApplication.CreateSlimBuilder();
-        builder.Logging.ClearProviders();
+        builder.Logging.SetMinimumLevel(LogLevel.Warning);
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             kestrel.ListenLocalhost(port, listenOptions =>
@@ -62,7 +64,7 @@ public class OAuthCallbackListener : IDisposable
 
             OAuthCallbackResult result;
 
-            // Handle error response from Slack
+            // Handle error response from OAuth provider
             if (!string.IsNullOrEmpty(error))
             {
                 result = OAuthCallbackResult.Failed($"Authorization denied: {error}");
@@ -100,7 +102,7 @@ public class OAuthCallbackListener : IDisposable
             _logger.LogDebug("OAuth callback listener started on https://localhost:{Port}/", port);
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(_options.CallbackTimeoutSeconds));
+            cts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
             using var registration = cts.Token.Register(() =>
             {
@@ -117,7 +119,7 @@ public class OAuthCallbackListener : IDisposable
         catch (OperationCanceledException)
         {
             _logger.LogWarning("OAuth callback timed out after {Timeout} seconds",
-                _options.CallbackTimeoutSeconds);
+                _options.TimeoutSeconds);
             return OAuthCallbackResult.Failed("Callback timed out");
         }
         catch (Exception ex)
@@ -198,20 +200,4 @@ public class OAuthCallbackListener : IDisposable
         _disposed = true;
         // Kestrel cleanup handled in WaitForCallbackAsync
     }
-}
-
-/// <summary>
-/// Result of an OAuth callback operation.
-/// </summary>
-public record OAuthCallbackResult
-{
-    public bool Success { get; init; }
-    public string? Code { get; init; }
-    public string? Error { get; init; }
-
-    public static OAuthCallbackResult Succeeded(string code) =>
-        new() { Success = true, Code = code };
-
-    public static OAuthCallbackResult Failed(string error) =>
-        new() { Success = false, Error = error };
 }

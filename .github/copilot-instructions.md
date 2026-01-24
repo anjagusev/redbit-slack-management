@@ -66,6 +66,13 @@ public static class ExitCode
 ### OAuth-Only Authentication (Critical!)
 **Token source**: Stored OAuth tokens in `~/.slack-cli/credentials.json` only. No command-line `--token` argument or environment variables.
 
+OAuth functionality is provided by the `RedBit.CommandLine.OAuth` library:
+- `OAuthPkce` - Static PKCE utilities (GenerateState, GenerateCodeVerifier, GenerateCodeChallenge)
+- `OAuthCallbackListener` - Local HTTPS callback server using Kestrel
+- `FileTokenStore` - Persists tokens to `~/.{applicationName}/credentials.json`
+- `SlackOAuthService` - Slack-specific OAuth implementation
+- `SlackStoredTokenExtensions` - Extension methods for Slack metadata (TeamId, UserId, etc.)
+
 Token is automatically injected into `HttpClient.DefaultRequestHeaders.Authorization` via DI configuration in [Program.cs](Program.cs). Middleware validates token presence before command execution (except `login`).
 
 ### HttpClient Factory Pattern
@@ -79,17 +86,21 @@ Token is automatically injected into `HttpClient.DefaultRequestHeaders.Authoriza
 // Registration in Program.cs
 builder.Services.AddTransient<SlackApiClient>();
 builder.Services.AddSingleton<FileDownloadService>();
-builder.Services.AddSingleton<FileTokenStore>();
-builder.Services.AddTransient<OAuthService>();
+
+// OAuth services via library extension method
+builder.Services.AddSlackOAuth("slack-cli", options =>
+    builder.Configuration.GetSection("Slack").Bind(options));
 
 // Constructor injection in commands/handlers
 public Handler(SlackApiClient slackClient, FileTokenStore tokenStore, ILogger<Handler> logger)
 {
     _slackClient = slackClient;
-    _tokenStore = tokenStore;
+    _tokenStore = tokenStore;  // From RedBit.CommandLine.OAuth
     _logger = logger;
 }
 ```
+
+The `AddSlackOAuth` extension registers `FileTokenStore`, `OAuthCallbackListener`, and `SlackOAuthService` from the reusable OAuth library.
 
 **Why no custom interfaces:**
 - YAGNI principle - don't add abstraction until actually needed
@@ -218,9 +229,43 @@ dotnet run -- channels --help
 - **Incorrect exit codes**: Use POSIX codes from `ExitCode` class, not generic 0/1/2
 - **Mutable properties on handlers**: Parameters must be passed via `InvokeAsync()` arguments, not properties
 
+## Project Structure
+
+```
+RedBit.Slack.Management/
+├── RedBit.CommandLine/                    # Reusable OAuth library
+│   ├── RedBit.CommandLine.OAuth/          # Core OAuth library (provider-agnostic)
+│   │   ├── OAuthPkce.cs                   # PKCE utilities
+│   │   ├── OAuthCallbackListener.cs       # Kestrel-based callback server
+│   │   ├── FileTokenStore.cs              # Token storage (~/.{appName}/credentials.json)
+│   │   ├── StoredToken.cs                 # Generic token with Metadata dictionary
+│   │   └── ServiceCollectionExtensions.cs # AddOAuthCore()
+│   │
+│   └── RedBit.CommandLine.OAuth.Slack/    # Slack OAuth provider
+│       ├── SlackOAuthService.cs           # Slack auth URL + token exchange
+│       ├── SlackStoredTokenExtensions.cs  # GetTeamId(), GetUserId(), etc.
+│       └── ServiceCollectionExtensions.cs # AddSlackOAuth()
+│
+├── Commands/                              # CLI command handlers
+├── Services/                              # SlackApiClient, FileDownloadService
+├── Models/                                # Slack domain models
+└── Configuration/                         # SlackOptions
+```
+
+### Using the OAuth Library
+The OAuth library is designed for reuse in other CLI projects:
+
+```csharp
+// For Slack OAuth
+builder.Services.AddSlackOAuth("your-app-name", options =>
+    builder.Configuration.GetSection("Slack").Bind(options));
+
+// Token stored at ~/.your-app-name/credentials.json
+```
+
 ## Project Conventions
 
-- **Namespace**: `RedBit.Slack.Management`
+- **Namespace**: `RedBit.Slack.Management` (main), `RedBit.CommandLine.OAuth` (library)
 - **Models**: Immutable records with positional parameters ([SlackChannel.cs](Models/SlackChannel.cs), etc.)
 - **Logging**: Use `ILogger` with structured logging: `_logger.LogInformation("Message with {PropertyName}", value)`
 - **Nullable**: Enabled project-wide - use `?` for nullable references

@@ -2,30 +2,43 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
-namespace RedBit.Slack.Management.Services.TokenStorage;
+namespace RedBit.CommandLine.OAuth;
 
 /// <summary>
-/// Token store that persists tokens to ~/.slack-cli/credentials.json.
+/// Token store that persists tokens to ~/.{applicationName}/credentials.json.
 /// </summary>
 public class FileTokenStore
 {
     private readonly string _credentialsPath;
     private readonly ILogger<FileTokenStore> _logger;
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        WriteIndented = true
     };
 
-    public FileTokenStore(ILogger<FileTokenStore> logger)
+    /// <summary>
+    /// Creates a new FileTokenStore for the specified application.
+    /// </summary>
+    /// <param name="applicationName">The application name, used to create the config directory (e.g., "slack-cli" creates ~/.slack-cli/)</param>
+    /// <param name="logger">Logger instance.</param>
+    public FileTokenStore(string applicationName, ILogger<FileTokenStore> logger)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(applicationName);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var configDir = Path.Combine(homeDir, ".slack-cli");
+        var configDir = Path.Combine(homeDir, $".{applicationName}");
         _credentialsPath = Path.Combine(configDir, "credentials.json");
     }
 
+    /// <summary>
+    /// Gets the path to the credentials file.
+    /// </summary>
+    public string CredentialsPath => _credentialsPath;
+
+    /// <summary>
+    /// Retrieves the stored token, if one exists.
+    /// </summary>
     public async Task<StoredToken?> GetTokenAsync(CancellationToken cancellationToken = default)
     {
         if (!File.Exists(_credentialsPath))
@@ -45,8 +58,7 @@ public class FileTokenStore
                 return null;
             }
 
-            _logger.LogDebug("Loaded stored token for user {User} in team {Team}",
-                token.UserName, token.TeamName);
+            _logger.LogDebug("Loaded stored token from {Path}", _credentialsPath);
             return token;
         }
         catch (JsonException ex)
@@ -61,6 +73,9 @@ public class FileTokenStore
         }
     }
 
+    /// <summary>
+    /// Saves a token to the credentials file.
+    /// </summary>
     public async Task SaveTokenAsync(StoredToken token, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(token);
@@ -82,6 +97,9 @@ public class FileTokenStore
         _logger.LogDebug("Saved token to {Path}", _credentialsPath);
     }
 
+    /// <summary>
+    /// Deletes the stored token.
+    /// </summary>
     public Task ClearTokenAsync(CancellationToken cancellationToken = default)
     {
         if (File.Exists(_credentialsPath))
@@ -93,6 +111,9 @@ public class FileTokenStore
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Returns true if a token is stored.
+    /// </summary>
     public Task<bool> HasTokenAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(File.Exists(_credentialsPath));

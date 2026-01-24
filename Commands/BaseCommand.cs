@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using RedBit.Slack.Management.Services.TokenStorage;
+using RedBit.CommandLine.OAuth;
 using System.CommandLine;
 
 namespace RedBit.Slack.Management.Commands;

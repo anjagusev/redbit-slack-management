@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
-using RedBit.Slack.Management.Services.TokenStorage;
+using RedBit.CommandLine.OAuth;
+using RedBit.CommandLine.OAuth.Slack;
 
 namespace RedBit.Slack.Management.Commands.CommandHandlers;
 
@@ -20,8 +21,8 @@ public class LogoutCommandHandler(FileTokenStore tokenStore, ILogger<LogoutComma
                 return 0;
             }
 
-            var userName = token.UserName ?? token.UserId ?? "Unknown";
-            var teamName = token.TeamName ?? token.TeamId ?? "Unknown";
+            var userName = token.GetUserName() ?? token.GetUserId() ?? "Unknown";
+            var teamName = token.GetTeamName() ?? token.GetTeamId() ?? "Unknown";
 
             await _tokenStore.ClearTokenAsync(cancellationToken);
 

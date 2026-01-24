@@ -6,7 +6,8 @@
       "Bash(dotnet clean:*)",
       "WebSearch",
       "Bash(find:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(ls:*)"
     ]
   }
 }

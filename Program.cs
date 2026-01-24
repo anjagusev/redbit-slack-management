@@ -25,11 +25,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using RedBit.CommandLine.OAuth;
+using RedBit.CommandLine.OAuth.Slack;
 using RedBit.Slack.Management.Commands;
 using RedBit.Slack.Management.Commands.CommandHandlers;
 using RedBit.Slack.Management.Configuration;
 using RedBit.Slack.Management.Services;
-using RedBit.Slack.Management.Services.TokenStorage;
 
 // Build host with DI configuration
 var builder = Host.CreateApplicationBuilder(args);
@@ -53,13 +54,9 @@ builder.Services.AddLogging(logging =>
     logging.SetMinimumLevel(LogLevel.Information);
 });
 
-// Token Storage
-builder.Services.AddSingleton<FileTokenStore>();
-
-// OAuth Services
-builder.Services.AddTransient<OAuthService>();
-builder.Services.AddTransient<OAuthCallbackListener>();
-builder.Services.AddHttpClient<OAuthService>();
+// Slack OAuth Services (from RedBit.CommandLine.OAuth.Slack library)
+builder.Services.AddSlackOAuth("slack-cli", options =>
+    builder.Configuration.GetSection(SlackOAuthOptions.SectionName).Bind(options));
 
 // HTTP Client for Slack API with token injection
 builder.Services.AddHttpClient<SlackApiClient>(async (sp, client) =>

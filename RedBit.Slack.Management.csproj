@@ -9,6 +9,12 @@
     <UserSecretsId>7d8c5f2e-4a91-4b3d-9e7f-1c6a8b2d5e3f</UserSecretsId>
   </PropertyGroup>
 
+  <!-- Exclude library projects from this project's compilation -->
+  <ItemGroup>
+    <Compile Remove="RedBit.CommandLine\**\*.cs" />
+    <None Remove="RedBit.CommandLine\**\*" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Remove="appsettings.json" />
   </ItemGroup>
@@ -25,6 +31,11 @@
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="RedBit.CommandLine\RedBit.CommandLine.OAuth\RedBit.CommandLine.OAuth.csproj" />
+    <ProjectReference Include="RedBit.CommandLine\RedBit.CommandLine.OAuth.Slack\RedBit.CommandLine.OAuth.Slack.csproj" />
   </ItemGroup>
 
 </Project>

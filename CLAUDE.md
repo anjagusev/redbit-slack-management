@@ -139,8 +139,10 @@ Register handlers in `Program.cs` DI container. **Do not use mutable properties*
 // Registration in Program.cs
 builder.Services.AddTransient<SlackApiClient>();
 builder.Services.AddSingleton<FileDownloadService>();
-builder.Services.AddSingleton<FileTokenStore>();
-builder.Services.AddTransient<OAuthService>();
+
+// OAuth services via library extension method
+builder.Services.AddSlackOAuth("slack-cli", options =>
+    builder.Configuration.GetSection(SlackOAuthOptions.SectionName).Bind(options));
 
 // Constructor injection in commands/handlers
 public Handler(SlackApiClient slackClient, FileTokenStore tokenStore, ILogger<Handler> logger)
@@ -162,11 +164,16 @@ public Handler(SlackApiClient slackClient, FileTokenStore tokenStore, ILogger<Ha
 ### OAuth 2.0 with PKCE (OAuth-Only Authentication)
 **Token source**: Stored OAuth tokens in `~/.slack-cli/credentials.json` only.
 
-- `OAuthService` - Builds authorization URL, exchanges code for token
-- `OAuthCallbackListener` - Local HTTP listener on port 8765 for callback
-- `FileTokenStore` - Persists tokens to `~/.slack-cli/credentials.json`
-- Token injected into `HttpClient.DefaultRequestHeaders.Authorization` via DI configuration
-- Middleware validates token presence before command execution (except `login`)
+OAuth functionality is provided by the `RedBit.CommandLine.OAuth` library:
+
+- `OAuthPkce` - Static PKCE utilities (GenerateState, GenerateCodeVerifier, GenerateCodeChallenge)
+- `OAuthCallbackListener` - Local HTTPS callback server using Kestrel
+- `FileTokenStore` - Persists tokens to `~/.{applicationName}/credentials.json`
+- `SlackOAuthService` - Slack-specific OAuth implementation (authorization URL, token exchange)
+- `SlackStoredTokenExtensions` - Extension methods for Slack-specific token metadata (TeamId, UserId, etc.)
+
+Token is injected into `HttpClient.DefaultRequestHeaders.Authorization` via DI configuration.
+Middleware validates token presence before command execution (except `login`).
 
 ### Adding New Commands
 1. Create `Commands/MyCommand.cs` with nested `Handler` class
@@ -212,5 +219,48 @@ extension(JsonElement element)
 - `Services/SlackApiClient.cs` - Slack Web API wrapper
 - `Extensions/JsonElementExtensions.cs` - Core JSON utility extensions for `JsonElement`
 - `Extensions/JsonElementSlackExtensions.cs` - Slack model parsing extensions (`ToSlackChannel()`, `ToSlackMessage()`, etc.)
-- `Services/TokenStorage/FileTokenStore.cs` - Persistent OAuth token storage
 - `Configuration/SlackOptions.cs` - Strongly-typed configuration model
+
+## Project Structure
+
+```
+slack-channel-export-messages/
+├── RedBit.Slack.Management.csproj     # Main CLI application
+├── RedBit.CommandLine/
+│   ├── RedBit.CommandLine.OAuth/      # Core OAuth library (reusable)
+│   │   ├── OAuthPkce.cs               # PKCE static utilities
+│   │   ├── OAuthCallbackListener.cs   # Kestrel-based callback server
+│   │   ├── FileTokenStore.cs          # File-based token storage
+│   │   ├── StoredToken.cs             # Generic token model with metadata
+│   │   ├── OAuthOptions.cs            # Base OAuth configuration
+│   │   └── ServiceCollectionExtensions.cs
+│   │
+│   └── RedBit.CommandLine.OAuth.Slack/ # Slack OAuth provider
+│       ├── SlackOAuthService.cs       # Slack-specific OAuth implementation
+│       ├── SlackOAuthOptions.cs       # Slack configuration
+│       ├── SlackStoredTokenExtensions.cs # Slack metadata accessors
+│       └── ServiceCollectionExtensions.cs
+│
+├── Commands/                           # CLI commands
+├── Services/                           # Slack API services
+└── Configuration/                      # Configuration models
+```
+
+### Using the OAuth Library in Other CLIs
+
+The `RedBit.CommandLine.OAuth` libraries are designed to be reusable. To use in a new CLI project:
+
+```csharp
+// For Slack OAuth
+builder.Services.AddSlackOAuth("your-app-name", options =>
+    builder.Configuration.GetSection("Slack").Bind(options));
+
+// Or for core OAuth only (implement your own provider)
+builder.Services.AddOAuthCore("your-app-name", opts =>
+{
+    opts.Port = 8765;
+    opts.TimeoutSeconds = 300;
+});
+```
+
+Token storage location is determined by the application name: `~/.{applicationName}/credentials.json`

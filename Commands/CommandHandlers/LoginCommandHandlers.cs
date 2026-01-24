@@ -2,23 +2,22 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using RedBit.Slack.Management.Configuration;
-using RedBit.Slack.Management.Services;
-using RedBit.Slack.Management.Services.TokenStorage;
+using RedBit.CommandLine.OAuth;
+using RedBit.CommandLine.OAuth.Slack;
 
 namespace RedBit.Slack.Management.Commands.CommandHandlers;
 
 public class LoginCommandHandler(
-        OAuthService oauthService,
+        SlackOAuthService oauthService,
         OAuthCallbackListener callbackListener,
         FileTokenStore tokenStore,
-        IOptions<SlackOptions> options,
+        IOptions<SlackOAuthOptions> options,
         ILogger<LoginCommandHandler> logger)
 {
-    private readonly OAuthService _oauthService = oauthService ?? throw new ArgumentNullException(nameof(oauthService));
+    private readonly SlackOAuthService _oauthService = oauthService ?? throw new ArgumentNullException(nameof(oauthService));
     private readonly OAuthCallbackListener _callbackListener = callbackListener ?? throw new ArgumentNullException(nameof(callbackListener));
     private readonly FileTokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-    private readonly SlackOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly SlackOAuthOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     private readonly ILogger<LoginCommandHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<int> InvokeAsync(CancellationToken cancellationToken = default)
@@ -44,16 +43,16 @@ public class LoginCommandHandler(
             if (existingToken is not null)
             {
                 _logger.LogWarning("Already logged in as {User} in {Team}.",
-                    existingToken.UserName ?? existingToken.UserId,
-                    existingToken.TeamName ?? existingToken.TeamId);
+                    existingToken.GetUserName() ?? existingToken.GetUserId(),
+                    existingToken.GetTeamName() ?? existingToken.GetTeamId());
                 _logger.LogWarning("Run 'logout' first to authenticate with a different account.");
                 return ExitCode.AuthError;
             }
 
             // Generate security parameters
-            var state = OAuthService.GenerateState();
-            var codeVerifier = OAuthService.GenerateCodeVerifier();
-            var codeChallenge = OAuthService.GenerateCodeChallenge(codeVerifier);
+            var state = OAuthPkce.GenerateState();
+            var codeVerifier = OAuthPkce.GenerateCodeVerifier();
+            var codeChallenge = OAuthPkce.GenerateCodeChallenge(codeVerifier);
 
             // Build authorization URL
             var authUrl = _oauthService.BuildAuthorizationUrl(state, codeChallenge, redirectUriOverride);
@@ -87,36 +86,26 @@ public class LoginCommandHandler(
                 redirectUriOverride,
                 cancellationToken);
 
-            // Get the user token (from authed_user for user tokens)
-            var accessToken = tokenResponse.AuthedUser?.AccessToken ?? tokenResponse.AccessToken;
-            var scopes = tokenResponse.AuthedUser?.Scope ?? tokenResponse.Scope;
-
-            if (string.IsNullOrWhiteSpace(accessToken))
+            // Create stored token from response
+            StoredToken storedToken;
+            try
             {
-                _logger.LogError("No access token received from Slack");
+                storedToken = _oauthService.CreateStoredToken(tokenResponse);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError("No access token received from Slack: {Message}", ex.Message);
                 return ExitCode.AuthError;
             }
-
-            // Save token
-            var storedToken = new StoredToken
-            {
-                AccessToken = accessToken,
-                TokenType = tokenResponse.AuthedUser?.TokenType ?? tokenResponse.TokenType ?? "Bearer",
-                TeamId = tokenResponse.Team?.Id,
-                TeamName = tokenResponse.Team?.Name,
-                UserId = tokenResponse.AuthedUser?.Id,
-                Scopes = scopes?.Split(',', StringSplitOptions.RemoveEmptyEntries),
-                ObtainedAt = DateTimeOffset.UtcNow
-            };
 
             await _tokenStore.SaveTokenAsync(storedToken, cancellationToken);
 
             _logger.LogInformation("");
             _logger.LogInformation("Successfully authenticated!");
             _logger.LogInformation("Team: {Team} ({TeamId})",
-                storedToken.TeamName ?? "Unknown", storedToken.TeamId ?? "unknown");
+                storedToken.GetTeamName() ?? "Unknown", storedToken.GetTeamId() ?? "unknown");
             _logger.LogInformation("User: {User}",
-                storedToken.UserId ?? "Unknown");
+                storedToken.GetUserId() ?? "Unknown");
             _logger.LogInformation("Scopes: {Scopes}",
                 string.Join(", ", storedToken.Scopes ?? []));
             _logger.LogInformation("");
@@ -129,9 +118,7 @@ public class LoginCommandHandler(
             _logger.LogError(ex, "Login failed - unexpected error");
             return ExitCode.InternalError;
         }
-        finally
-        {
-        }
+
     }
 
     private static void OpenBrowser(string url)

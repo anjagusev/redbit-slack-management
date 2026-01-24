@@ -1,67 +1,30 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using RedBit.Slack.Management.Configuration;
-using RedBit.Slack.Management.Models;
 
-namespace RedBit.Slack.Management.Services;
+namespace RedBit.CommandLine.OAuth.Slack;
 
 /// <summary>
 /// Handles Slack OAuth 2.0 protocol operations.
 /// </summary>
-public class OAuthService
+public class SlackOAuthService
 {
-    private readonly SlackOptions _options;
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<OAuthService> _logger;
+    private const string AuthorizationUrl = "https://slack.com/oauth/v2/authorize";
+    private const string TokenUrl = "https://slack.com/api/oauth.v2.access";
 
-    public OAuthService(
-        IOptions<SlackOptions> options,
+    private readonly SlackOAuthOptions _options;
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<SlackOAuthService> _logger;
+
+    public SlackOAuthService(
+        IOptions<SlackOAuthOptions> options,
         HttpClient httpClient,
-        ILogger<OAuthService> logger)
+        ILogger<SlackOAuthService> logger)
     {
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    /// <summary>
-    /// Generates a cryptographically secure random state parameter for CSRF protection.
-    /// </summary>
-    public static string GenerateState()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(32);
-        return Convert.ToBase64String(bytes)
-            .Replace("+", "-")
-            .Replace("/", "_")
-            .TrimEnd('=');
-    }
-
-    /// <summary>
-    /// Generates a PKCE code verifier (random string between 43-128 characters).
-    /// </summary>
-    public static string GenerateCodeVerifier()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(64);
-        return Convert.ToBase64String(bytes)
-            .Replace("+", "-")
-            .Replace("/", "_")
-            .TrimEnd('=');
-    }
-
-    /// <summary>
-    /// Generates a PKCE code challenge from the verifier using S256 method.
-    /// </summary>
-    public static string GenerateCodeChallenge(string codeVerifier)
-    {
-        using var sha256 = SHA256.Create();
-        var challengeBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
-        return Convert.ToBase64String(challengeBytes)
-            .Replace("+", "-")
-            .Replace("/", "_")
-            .TrimEnd('=');
     }
 
     /// <summary>
@@ -75,13 +38,17 @@ public class OAuthService
         if (string.IsNullOrWhiteSpace(_options.ClientId))
             throw new InvalidOperationException("ClientId is not configured");
 
-        var redirectUri = redirectUriOverride ?? _options.GetCallbackRedirectUri();
+        var redirectUri = redirectUriOverride ?? _options.GetRedirectUri();
         var scopes = string.Join(",", _options.Scopes);
 
-        var url = new StringBuilder("https://slack.com/oauth/v2/authorize?");
+        var url = new StringBuilder($"{AuthorizationUrl}?");
         url.Append($"client_id={Uri.EscapeDataString(_options.ClientId)}");
         url.Append($"&redirect_uri={Uri.EscapeDataString(redirectUri)}");
-        url.Append($"&user_scope={Uri.EscapeDataString(scopes)}");
+
+        // Slack uses user_scope for user tokens, scope for bot tokens
+        var scopeParam = _options.UseUserScopes ? "user_scope" : "scope";
+        url.Append($"&{scopeParam}={Uri.EscapeDataString(scopes)}");
+
         url.Append($"&state={Uri.EscapeDataString(state)}");
         url.Append($"&code_challenge={Uri.EscapeDataString(codeChallenge)}");
         url.Append("&code_challenge_method=S256");
@@ -97,7 +64,7 @@ public class OAuthService
     /// <param name="codeVerifier">PKCE code verifier.</param>
     /// <param name="redirectUriOverride">Optional override for redirect URI (must match the one used in authorization).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<OAuthTokenResponse> ExchangeCodeForTokenAsync(
+    public async Task<SlackOAuthTokenResponse> ExchangeCodeForTokenAsync(
         string code,
         string codeVerifier,
         string? redirectUriOverride = null,
@@ -108,7 +75,7 @@ public class OAuthService
         if (string.IsNullOrWhiteSpace(_options.ClientSecret))
             throw new InvalidOperationException("ClientSecret is not configured");
 
-        var redirectUri = redirectUriOverride ?? _options.GetCallbackRedirectUri();
+        var redirectUri = redirectUriOverride ?? _options.GetRedirectUri();
 
         var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -121,15 +88,11 @@ public class OAuthService
 
         _logger.LogDebug("Exchanging authorization code for access token");
 
-        var response = await _httpClient.PostAsync(
-            "https://slack.com/api/oauth.v2.access",
-            content,
-            cancellationToken);
-
+        var response = await _httpClient.PostAsync(TokenUrl, content, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        var tokenResponse = JsonSerializer.Deserialize<OAuthTokenResponse>(json);
+        var tokenResponse = JsonSerializer.Deserialize<SlackOAuthTokenResponse>(json);
 
         if (tokenResponse is null)
             throw new InvalidOperationException("Failed to deserialize OAuth token response");
@@ -142,5 +105,29 @@ public class OAuthService
 
         _logger.LogDebug("Successfully exchanged code for access token");
         return tokenResponse;
+    }
+
+    /// <summary>
+    /// Creates a StoredToken from a Slack OAuth token response.
+    /// </summary>
+    /// <param name="response">The OAuth token response from Slack.</param>
+    /// <returns>A StoredToken with Slack-specific metadata.</returns>
+    public StoredToken CreateStoredToken(SlackOAuthTokenResponse response)
+    {
+        // For user tokens, the access token and scopes are in authed_user
+        var accessToken = response.AuthedUser?.AccessToken ?? response.AccessToken;
+        var scopes = response.AuthedUser?.Scope ?? response.Scope;
+        var tokenType = response.AuthedUser?.TokenType ?? response.TokenType ?? "Bearer";
+
+        if (string.IsNullOrWhiteSpace(accessToken))
+            throw new InvalidOperationException("No access token in response");
+
+        return SlackStoredTokenExtensions.CreateSlackToken(
+            accessToken: accessToken,
+            tokenType: tokenType,
+            teamId: response.Team?.Id,
+            teamName: response.Team?.Name,
+            userId: response.AuthedUser?.Id,
+            scopes: scopes?.Split(',', StringSplitOptions.RemoveEmptyEntries));
     }
 }

@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RedBit.CommandLine.OAuth;
 using RedBit.Slack.Management.Configuration;
 using RedBit.Slack.Management.Models.Slack;
 using RedBit.Slack.Management.Services;
-using RedBit.Slack.Management.Services.TokenStorage;
 
 namespace RedBit.Slack.Management.Commands.CommandHandlers;
 

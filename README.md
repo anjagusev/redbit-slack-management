@@ -212,6 +212,21 @@ fi
 
 ```
 RedBit.Slack.Management/
+├── RedBit.CommandLine/                    # Reusable OAuth library
+│   ├── RedBit.CommandLine.OAuth/          # Core OAuth library (provider-agnostic)
+│   │   ├── OAuthPkce.cs                   # PKCE utilities (state, verifier, challenge)
+│   │   ├── OAuthCallbackListener.cs       # Kestrel-based HTTPS callback server
+│   │   ├── FileTokenStore.cs              # File-based token storage
+│   │   ├── StoredToken.cs                 # Generic token model with metadata
+│   │   ├── OAuthOptions.cs                # Base OAuth configuration
+│   │   └── ServiceCollectionExtensions.cs # DI helper (AddOAuthCore)
+│   │
+│   └── RedBit.CommandLine.OAuth.Slack/    # Slack OAuth provider
+│       ├── SlackOAuthService.cs           # Slack-specific OAuth implementation
+│       ├── SlackOAuthOptions.cs           # Slack configuration
+│       ├── SlackStoredTokenExtensions.cs  # Slack metadata accessors
+│       └── ServiceCollectionExtensions.cs # DI helper (AddSlackOAuth)
+│
 ├── Commands/
 │   ├── AuthTestCommand.cs          # Authentication testing command handler
 │   ├── ChannelInfoCommand.cs       # Channel information retrieval
@@ -229,18 +244,10 @@ RedBit.Slack.Management/
 │   ├── SlackApiException.cs        # Slack API error handling
 │   ├── SlackAuthResponse.cs        # Authentication response model
 │   ├── SlackChannel.cs             # Channel data model
-│   ├── SlackFile.cs                # File metadata model
-│   ├── OAuthTokenResponse.cs       # OAuth token response
-│   ├── OAuthAuthedUser.cs          # OAuth authed user data
-│   └── OAuthTeamInfo.cs            # OAuth team data
+│   └── SlackFile.cs                # File metadata model
 ├── Services/
 │   ├── SlackApiClient.cs           # Slack API client implementation
-│   ├── FileDownloadService.cs      # File download implementation
-│   ├── OAuthService.cs             # OAuth flow orchestration
-│   ├── OAuthCallbackListener.cs    # OAuth callback HTTP listener
-│   └── TokenStorage/
-│       ├── FileTokenStore.cs       # Token persistence to disk
-│       └── StoredToken.cs          # Token storage model
+│   └── FileDownloadService.cs      # File download implementation
 ├── appsettings.json                # Application configuration
 ├── Program.cs                      # Application entry point with System.CommandLine setup
 └── RedBit.Slack.Management.csproj
@@ -269,9 +276,13 @@ This project uses **concrete class registration** exclusively, following the YAG
 ```csharp
 builder.Services.AddTransient<SlackApiClient>();
 builder.Services.AddSingleton<FileDownloadService>();
-builder.Services.AddSingleton<FileTokenStore>();
-builder.Services.AddTransient<OAuthService>();
+
+// OAuth services via library extension method
+builder.Services.AddSlackOAuth("slack-cli", options =>
+    builder.Configuration.GetSection("Slack").Bind(options));
 ```
+
+The `AddSlackOAuth` extension registers `FileTokenStore`, `OAuthCallbackListener`, and `SlackOAuthService` from the reusable OAuth library.
 
 Framework interfaces (`ILogger<T>`, `IOptions<T>`, `IConfiguration`) are always used as they're established Microsoft abstractions with proven benefits.
 
