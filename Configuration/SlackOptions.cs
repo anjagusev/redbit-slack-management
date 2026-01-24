@@ -63,4 +63,10 @@ public class SlackOptions
     /// </summary>
     [Range(30, 600)]
     public int CallbackTimeoutSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// ngrok domain for OAuth callback tunnel (e.g., "rbd-slack-channel-exporter").
+    /// If set, ngrok will be started automatically during login.
+    /// </summary>
+    public string? NgrokDomain { get; set; }
 }

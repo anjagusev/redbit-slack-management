@@ -64,6 +64,10 @@ builder.Services.AddTransient<OAuthService>();
 builder.Services.AddTransient<OAuthCallbackListener>();
 builder.Services.AddHttpClient<OAuthService>();
 
+// ngrok Service (for HTTPS OAuth callbacks)
+builder.Services.AddTransient<NgrokService>();
+builder.Services.AddHttpClient<NgrokService>();
+
 // Services
 builder.Services.AddHttpClient<SlackApiClient>((sp, client) =>
 {

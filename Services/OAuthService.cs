@@ -67,12 +67,15 @@ public class OAuthService
     /// <summary>
     /// Builds the Slack OAuth authorization URL.
     /// </summary>
-    public string BuildAuthorizationUrl(string state, string codeChallenge)
+    /// <param name="state">CSRF protection state parameter.</param>
+    /// <param name="codeChallenge">PKCE code challenge.</param>
+    /// <param name="redirectUriOverride">Optional override for redirect URI (e.g., ngrok HTTPS URL).</param>
+    public string BuildAuthorizationUrl(string state, string codeChallenge, string? redirectUriOverride = null)
     {
         if (string.IsNullOrWhiteSpace(_options.ClientId))
             throw new InvalidOperationException("ClientId is not configured");
 
-        var redirectUri = $"http://localhost:{_options.CallbackPort}/callback";
+        var redirectUri = redirectUriOverride ?? $"http://localhost:{_options.CallbackPort}/callback";
         var scopes = string.Join(",", _options.Scopes);
 
         var url = new StringBuilder("https://slack.com/oauth/v2/authorize?");
@@ -90,9 +93,14 @@ public class OAuthService
     /// <summary>
     /// Exchanges an authorization code for an access token.
     /// </summary>
+    /// <param name="code">Authorization code from callback.</param>
+    /// <param name="codeVerifier">PKCE code verifier.</param>
+    /// <param name="redirectUriOverride">Optional override for redirect URI (must match the one used in authorization).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<OAuthTokenResponse> ExchangeCodeForTokenAsync(
         string code,
         string codeVerifier,
+        string? redirectUriOverride = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.ClientId))
@@ -100,7 +108,7 @@ public class OAuthService
         if (string.IsNullOrWhiteSpace(_options.ClientSecret))
             throw new InvalidOperationException("ClientSecret is not configured");
 
-        var redirectUri = $"http://localhost:{_options.CallbackPort}/callback";
+        var redirectUri = redirectUriOverride ?? $"http://localhost:{_options.CallbackPort}/callback";
 
         var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {

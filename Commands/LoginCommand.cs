@@ -15,6 +15,7 @@ public class LoginCommand
         private readonly OAuthService _oauthService;
         private readonly OAuthCallbackListener _callbackListener;
         private readonly FileTokenStore _tokenStore;
+        private readonly NgrokService _ngrokService;
         private readonly SlackOptions _options;
         private readonly ILogger<Handler> _logger;
 
@@ -22,18 +23,22 @@ public class LoginCommand
             OAuthService oauthService,
             OAuthCallbackListener callbackListener,
             FileTokenStore tokenStore,
+            NgrokService ngrokService,
             IOptions<SlackOptions> options,
             ILogger<Handler> logger)
         {
             _oauthService = oauthService ?? throw new ArgumentNullException(nameof(oauthService));
             _callbackListener = callbackListener ?? throw new ArgumentNullException(nameof(callbackListener));
             _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+            _ngrokService = ngrokService ?? throw new ArgumentNullException(nameof(ngrokService));
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<int> InvokeAsync(CancellationToken cancellationToken = default)
         {
+            string? redirectUriOverride = null;
+
             try
             {
                 // Validate OAuth configuration
@@ -59,13 +64,21 @@ public class LoginCommand
                     return 1;
                 }
 
+                // Start ngrok tunnel if configured
+                if (!string.IsNullOrWhiteSpace(_options.NgrokDomain))
+                {
+                    var tunnelUrl = await _ngrokService.StartTunnelAsync(cancellationToken);
+                    redirectUriOverride = $"{tunnelUrl}/callback";
+                    _logger.LogInformation("Using ngrok tunnel: {Url}", redirectUriOverride);
+                }
+
                 // Generate security parameters
                 var state = OAuthService.GenerateState();
                 var codeVerifier = OAuthService.GenerateCodeVerifier();
                 var codeChallenge = OAuthService.GenerateCodeChallenge(codeVerifier);
 
                 // Build authorization URL
-                var authUrl = _oauthService.BuildAuthorizationUrl(state, codeChallenge);
+                var authUrl = _oauthService.BuildAuthorizationUrl(state, codeChallenge, redirectUriOverride);
 
                 _logger.LogInformation("Opening browser for Slack authorization...");
                 _logger.LogInformation("If the browser doesn't open, visit this URL:");
@@ -93,6 +106,7 @@ public class LoginCommand
                 var tokenResponse = await _oauthService.ExchangeCodeForTokenAsync(
                     callbackResult.Code!,
                     codeVerifier,
+                    redirectUriOverride,
                     cancellationToken);
 
                 // Get the user token (from authed_user for user tokens)
@@ -136,6 +150,14 @@ public class LoginCommand
             {
                 _logger.LogError(ex, "Login failed");
                 return 1;
+            }
+            finally
+            {
+                // Always stop ngrok when OAuth completes (success, failure, or cancellation)
+                if (_ngrokService.IsRunning)
+                {
+                    await _ngrokService.StopTunnelAsync();
+                }
             }
         }
 
