@@ -1,0 +1,33 @@
+# Auto detect text files and normalize line endings to LF in the repository
+* text=auto
+
+# Source code files
+*.cs text diff=csharp
+*.csproj text diff=csharp
+*.sln text
+
+# Configuration files
+*.json text
+*.xml text
+*.config text
+*.props text
+*.targets text
+
+# Documentation
+*.md text
+*.txt text
+README text
+
+# Scripts
+*.sh text eol=lf
+*.ps1 text eol=crlf
+
+# Binary files
+*.dll binary
+*.exe binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
