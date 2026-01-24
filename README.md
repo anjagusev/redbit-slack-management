@@ -4,16 +4,17 @@ A .NET CLI tool for interacting with the Slack API to test authentication, list 
 
 ## Features
 
+- **OAuth authentication**: Browser-based OAuth login flow with secure token storage
 - **Authentication testing**: Verify your Slack API token
 - **Channel management**: List all channels and get detailed channel information
 - **File downloads**: Download files from Slack with proper authentication
-- **Flexible configuration**: Multiple ways to provide your Slack token
-- **Modern architecture**: Built with dependency injection, typed configuration, and structured logging
+- **Modern architecture**: Built with System.CommandLine, dependency injection, typed configuration, and structured logging
+- **POSIX-compliant exit codes**: Standard exit codes for better shell integration
 
 ## Prerequisites
 
 - .NET 10 SDK or later
-- Slack API token (starts with `xoxp-` for user tokens or `xoxb-` for bot tokens)
+- Slack App with OAuth configured (Client ID and Client Secret)
 
 ## Getting Started
 
@@ -24,121 +25,188 @@ git clone <repository-url>
 cd slack-channel-export-messages
 ```
 
-### 2. Configuration
+### 2. Configure Slack App OAuth
 
-The tool supports multiple configuration sources for the Slack API token, processed in the following priority order (first match wins):
-
-1. **Command-line argument**: `--token <value>` (highest priority)
-2. **Environment variable**: `SLACK_TOKEN`
-3. **User Secrets**: `Slack:Token` (recommended for development)
-4. **Configuration file**: `appsettings.json` `Slack:Token` (lowest priority)
-
-#### Option A: User Secrets (Recommended for Development)
-
-User Secrets provide a secure way to store your token locally without committing it to version control:
-
-```bash
-# Set your Slack token
-dotnet user-secrets set "Slack:Token" "xoxp-your-token-here"
-
-# Verify it was set
-dotnet user-secrets list
-
-# Remove if needed
-dotnet user-secrets remove "Slack:Token"
-```
-
-#### Option B: Environment Variable
-
-```bash
-# Windows PowerShell
-$env:SLACK_TOKEN = "xoxp-your-token-here"
-
-# Windows CMD
-set SLACK_TOKEN=xoxp-your-token-here
-
-# Linux/macOS
-export SLACK_TOKEN=xoxp-your-token-here
-```
-
-#### Option C: Command-Line Argument
-
-```bash
-dotnet run -- auth-test --token xoxp-your-token-here
-```
-
-⚠️ **Security Note**: Do NOT commit your Slack token to version control. The `Token` property in `appsettings.json` should remain empty in the repository.
-
-### 3. Obtain a Slack Token
+Create or configure a Slack App with OAuth capabilities:
 
 1. Go to [Slack API Apps](https://api.slack.com/apps)
 2. Create a new app or select an existing one
 3. Navigate to "OAuth & Permissions"
-4. Install the app to your workspace
-5. Copy the "Bot User OAuth Token" (`xoxb-...`) or "User OAuth Token" (`xoxp-...`)
-6. Ensure your token has the necessary scopes:
+4. Add a **Redirect URL**: `http://localhost:8765/callback` (required for OAuth flow)
+5. Add **OAuth Scopes** (under "User Token Scopes"):
    - `channels:read` - List and get channel information
    - `files:read` - Access file information
    - `files:write` - Download files
+6. Navigate to "Basic Information"
+7. Copy your **Client ID** and **Client Secret**
+
+### 3. Configure the Application
+
+Add your Slack App credentials to `appsettings.json`:
+
+```json
+{
+  "Slack": {
+    "ClientId": "your-client-id-here",
+    "ClientSecret": "your-client-secret-here",
+    "BaseUri": "https://slack.com/api/",
+    "TimeoutSeconds": 60,
+    "UserAgent": "SlackCLI/2.0 (+https://redbit.com)",
+    "CallbackTimeoutSeconds": 300
+  }
+}
+```
+
+⚠️ **Security Note**: Consider using User Secrets for sensitive values:
+
+```bash
+dotnet user-secrets set "Slack:ClientId" "your-client-id"
+dotnet user-secrets set "Slack:ClientSecret" "your-client-secret"
+```
+
+### 4. Authenticate
+
+Run the login command to authenticate via browser:
+
+```bash
+dotnet run -- login
+```
+
+This will:
+1. Open your browser to Slack's authorization page
+2. Prompt you to authorize the app
+3. Store the OAuth token securely in `~/.slack-cli/credentials.json`
+4. You're now authenticated for all subsequent commands
+
+### 5. Verify Authentication
+
+```bash
+dotnet run -- whoami
+```
 
 ## Usage
 
-### Test Authentication
+The tool uses a hierarchical command structure with subcommands. Use `--help` on any command to see available options:
+
+```bash
+dotnet run -- --help
+dotnet run -- channels --help
+dotnet run -- channels list --help
+```
+
+### Authentication Commands
+
+#### Login (OAuth)
+
+Authenticate via browser-based OAuth flow:
+
+```bash
+dotnet run -- login
+```
+
+#### Logout
+
+Clear stored credentials:
+
+```bash
+dotnet run -- logout
+```
+
+#### Who Am I
+
+Show current authentication status:
+
+```bash
+dotnet run -- whoami
+```
+
+### API Testing
+
+#### Test Authentication
 
 Verify that your token is valid:
 
 ```bash
-dotnet run -- auth-test --token xoxp-...
-
-# Or with environment variable set
-dotnet run -- auth-test
+dotnet run -- auth test
 ```
 
-### List Channels
+### Channel Commands
 
-List all channels accessible with your token:
+#### List Channels
+
+List channels accessible with your token:
 
 ```bash
 # List default 20 channels
-dotnet run -- list-channels --token xoxp-...
+dotnet run -- channels list
 
 # List up to 50 channels
-dotnet run -- list-channels --token xoxp-... --limit 50
+dotnet run -- channels list --limit 50
 ```
 
-### Get Channel Information
+#### Get Channel Information
 
 Retrieve detailed information about a specific channel:
 
 ```bash
-dotnet run -- channel-info --channel C0123456789 --token xoxp-...
+dotnet run -- channels info --channel C0123456789
 ```
 
-### Download File
+### File Commands
+
+#### Download File
 
 Download a file from Slack:
 
 ```bash
-dotnet run -- download-file F0123456789 --out ./downloads --token xoxp-...
+dotnet run -- files download F0123456789 --out ./downloads
 ```
 
 The file will be saved to the specified output directory with its original filename.
 
 ## Commands Reference
 
-| Command | Description | Required Arguments | Optional Arguments |
-|---------|-------------|-------------------|-------------------|
-| `auth-test` | Test Slack authentication | `--token` (or env/config) | None |
-| `list-channels` | List all channels | `--token` (or env/config) | `--limit <number>` (default: 20) |
-| `channel-info` | Get channel details | `--token` (or env/config)<br>`--channel <id>` | None |
-| `download-file` | Download a file | `--token` (or env/config)<br>`<file-id>`<br>`--out <directory>` | None |
+| Command | Description | Arguments | Options |
+|---------|-------------|-----------|---------|
+| `login` | Authenticate via browser OAuth flow | None | None |
+| `logout` | Clear stored credentials | None | None |
+| `whoami` | Show authentication status | None | None |
+| `auth test` | Test Slack API authentication | None | None |
+| `channels list` | List all channels | None | `--limit <number>` (default: 20) |
+| `channels info` | Get channel details | None | `--channel <id>` (required) |
+| `files download` | Download a file | `<file-id>` (required) | `--out <directory>` (required) |
+
+## Exit Codes
+
+The tool uses POSIX-compliant exit codes for better shell integration:
+
+| Code | Name | Meaning | Example Scenarios |
+|------|------|---------|-------------------|
+| `0` | Success | Command completed successfully | Successful auth, download, etc. |
+| `64` | UsageError | Command line usage error | Missing required argument, unknown command |
+| `69` | ServiceError | Remote service unavailable | Slack API errors, network failures |
+| `70` | InternalError | Internal software error | Unexpected exceptions, bugs |
+| `73` | FileError | File I/O error | Cannot create output file, permission denied |
+| `77` | AuthError | Authentication failure | Missing/invalid token, not logged in |
+| `78` | ConfigError | Configuration error | Missing ClientId/ClientSecret |
+
+Example usage in shell scripts:
+
+```bash
+dotnet run -- auth test
+if [ $? -eq 0 ]; then
+  echo "Authentication successful"
+elif [ $? -eq 77 ]; then
+  echo "Not authenticated. Run 'login' first."
+fi
+```
 
 ## Technical Stack
 
 - **.NET 10** / C# 14
+- **System.CommandLine 2.0.0-beta4** - Modern command-line parsing with hierarchical commands
 - **Microsoft.Extensions.Hosting** 10.0.2 - Dependency injection and configuration
 - **Microsoft.Extensions.Http** 10.0.2 - HTTP client factory
-- **Microsoft.Extensions.Configuration.EnvironmentVariables** 10.0.2 - Environment variable support
 
 ## Project Structure
 
@@ -148,19 +216,30 @@ slack-channel-export-messages/
 │   ├── AuthTestCommand.cs          # Authentication testing command handler
 │   ├── ChannelInfoCommand.cs       # Channel information retrieval
 │   ├── ListChannelsCommand.cs      # Channel listing
-│   └── DownloadFileCommand.cs      # File download functionality
+│   ├── DownloadFileCommand.cs      # File download functionality
+│   ├── LoginCommand.cs             # OAuth login flow handler
+│   ├── LogoutCommand.cs            # Logout handler
+│   └── WhoAmICommand.cs            # Authentication status handler
 ├── Configuration/
 │   └── SlackOptions.cs             # Strongly-typed configuration model
 ├── Models/
 │   ├── SlackApiException.cs        # Slack API error handling
 │   ├── SlackAuthResponse.cs        # Authentication response model
 │   ├── SlackChannel.cs             # Channel data model
-│   └── SlackFile.cs                # File metadata model
+│   ├── SlackFile.cs                # File metadata model
+│   ├── OAuthTokenResponse.cs       # OAuth token response
+│   ├── OAuthAuthedUser.cs          # OAuth authed user data
+│   └── OAuthTeamInfo.cs            # OAuth team data
 ├── Services/
 │   ├── SlackApiClient.cs           # Slack API client implementation
-│   └── FileDownloadService.cs      # File download implementation
+│   ├── FileDownloadService.cs      # File download implementation
+│   ├── OAuthService.cs             # OAuth flow orchestration
+│   ├── OAuthCallbackListener.cs    # OAuth callback HTTP listener
+│   └── TokenStorage/
+│       ├── FileTokenStore.cs       # Token persistence to disk
+│       └── StoredToken.cs          # Token storage model
 ├── appsettings.json                # Application configuration
-├── Program.cs                      # Application entry point
+├── Program.cs                      # Application entry point with System.CommandLine setup
 └── slack-channel-export-messages.csproj
 ```
 
@@ -188,6 +267,7 @@ This project uses **concrete class registration** exclusively, following the YAG
 builder.Services.AddTransient<SlackApiClient>();
 builder.Services.AddSingleton<FileDownloadService>();
 builder.Services.AddSingleton<FileTokenStore>();
+builder.Services.AddTransient<OAuthService>();
 ```
 
 Framework interfaces (`ILogger<T>`, `IOptions<T>`, `IConfiguration`) are always used as they're established Microsoft abstractions with proven benefits.
@@ -199,13 +279,17 @@ The `appsettings.json` file supports the following Slack-related settings:
 ```json
 {
   "Slack": {
-    "Token": "",                                          // Slack API token (use User Secrets instead)
-    "TimeoutSeconds": 60,                                 // HTTP request timeout (1-300)
+    "ClientId": "",                                       // Slack App Client ID (required for OAuth)
+    "ClientSecret": "",                                   // Slack App Client Secret (required for OAuth)
+    "BaseUri": "https://slack.com/api/",                 // Slack API base URL
+    "TimeoutSeconds": 60,                                // HTTP request timeout (1-300)
     "UserAgent": "SlackCLI/2.0 (+https://redbit.com)",   // User-Agent header
-    "BaseUri": "https://slack.com/api/"                  // Slack API base URL
+    "CallbackTimeoutSeconds": 300                        // OAuth callback timeout (30-600)
   }
 }
 ```
+
+**Token Storage**: OAuth tokens are stored securely in `~/.slack-cli/credentials.json` after successful login.
 
 ## Error Handling
 

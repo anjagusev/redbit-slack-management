@@ -2,33 +2,35 @@
 // .NET 10 / C# 14 CLI for Slack authentication and basic API operations.
 //
 // Usage examples:
-//   dotnet run -- login                  # Browser-based OAuth login
-//   dotnet run -- logout                 # Clear stored credentials
-//   dotnet run -- whoami                 # Show authentication status
-//   dotnet run -- auth-test              # Test authentication (uses stored token)
-//   dotnet run -- auth-test --token xoxp-...
-//   dotnet run -- channel-info --channel C0123456789 --token xoxp-...
-//   dotnet run -- list-channels --token xoxp-...
-//   dotnet run -- download-file F0123456789 --out ./downloads --token xoxp-...
+//   dotnet run -- login                              # Browser-based OAuth login
+//   dotnet run -- logout                             # Clear stored credentials
+//   dotnet run -- whoami                             # Show authentication status
+//   dotnet run -- auth test                          # Test authentication
+//   dotnet run -- channels list                      # List channels
+//   dotnet run -- channels list --limit 50           # List up to 50 channels
+//   dotnet run -- channels info --channel C0123...   # Get channel information
+//   dotnet run -- files download F0123... --out ./downloads  # Download a file
 //
-// Token sources (first match wins):
-//   1) ~/.slack-cli/credentials.json (stored OAuth token)
+// Authentication:
+//   All commands (except 'login') require authentication via OAuth.
+//   Run 'login' first to authenticate, credentials stored in ~/.slack-cli/credentials.json
 //
 // Notes:
-// - It calls Slack Web API endpoints over HTTPS.
+// - Calls Slack Web API endpoints over HTTPS.
 // - For files, Slack requires the Bearer token header on the file URL download request.
 
+using System.CommandLine;
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using SlackChannelExportMessages.Commands;
 using SlackChannelExportMessages.Configuration;
 using SlackChannelExportMessages.Services;
 using SlackChannelExportMessages.Services.TokenStorage;
-using System.Net.Http.Headers;
 
+// Build host with DI configuration
 var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
@@ -58,12 +60,9 @@ builder.Services.AddTransient<OAuthService>();
 builder.Services.AddTransient<OAuthCallbackListener>();
 builder.Services.AddHttpClient<OAuthService>();
 
-// Services
+// HTTP Client for Slack API with token injection
 builder.Services.AddHttpClient<SlackApiClient>(async (sp, client) =>
 {
-    var options = sp.GetRequiredService<IOptions<SlackOptions>>().Value;
-
-    // get the token if available
     var tokenStore = sp.GetRequiredService<FileTokenStore>();
     var token = (await tokenStore.GetTokenAsync())?.AccessToken;
 
@@ -75,7 +74,7 @@ builder.Services.AddHttpClient<SlackApiClient>(async (sp, client) =>
 
 builder.Services.AddSingleton<FileDownloadService>();
 
-// Commands
+// Command handlers
 builder.Services.AddTransient<AuthTestCommand.Handler>();
 builder.Services.AddTransient<ChannelInfoCommand.Handler>();
 builder.Services.AddTransient<ListChannelsCommand.Handler>();
@@ -85,117 +84,180 @@ builder.Services.AddTransient<LogoutCommand.Handler>();
 builder.Services.AddTransient<WhoAmICommand.Handler>();
 
 var host = builder.Build();
+var services = host.Services;
 
-// Check if token exists, fail fast if it does not
-var tokenStore = host.Services.GetRequiredService<FileTokenStore>();
-var token = await tokenStore.GetTokenAsync();
+// TODO - this is messy, refactor to have custom commands similar to the harvest one
+// Build command tree using System.CommandLine
+var rootCommand = new RootCommand("Slack Channel Export Messages - CLI tool for Slack API operations");
 
-if (token == null || string.IsNullOrWhiteSpace(token?.AccessToken))
+// Root-level commands (authentication flow)
+var loginCommand = new Command("login", "Authenticate via browser OAuth flow");
+
+loginCommand.SetHandler(() =>
 {
-    Console.Error.WriteLine("Missing token. Options:");
-    Console.Error.WriteLine("  1. Run 'login' for browser-based OAuth authentication");
-    Console.Error.WriteLine();
-    Console.Error.WriteLine("Usage: dotnet run -- <command> [options]");
-    Console.Error.WriteLine("Commands: login, logout, whoami, auth-test, channel-info, list-channels, download-file");
-    return 2;
-}
+    var handler = services.GetRequiredService<LoginCommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
+});
 
-// Route to command handlers
-var commandName = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : null;
-switch (commandName?.ToLowerInvariant())
+var logoutCommand = new Command("logout", "Clear stored credentials");
+logoutCommand.SetHandler(() =>
 {
-    case "login":
-        {
-            var handler = host.Services.GetRequiredService<LoginCommand.Handler>();
-            return await handler.InvokeAsync();
-        }
+    var handler = services.GetRequiredService<LogoutCommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
+});
 
-    case "logout":
-        {
-            var handler = host.Services.GetRequiredService<LogoutCommand.Handler>();
-            return await handler.InvokeAsync();
-        }
-
-    case "whoami":
-        {
-            var handler = host.Services.GetRequiredService<WhoAmICommand.Handler>();
-            return await handler.InvokeAsync();
-        }
-
-    case "auth-test":
-        {
-            var handler = host.Services.GetRequiredService<AuthTestCommand.Handler>();
-            return await handler.InvokeAsync();
-        }
-
-    case "channel-info":
-        {
-            var channel = GetArg(args, "--channel");
-            if (string.IsNullOrWhiteSpace(channel))
-            {
-                Console.Error.WriteLine("Error: --channel is required for channel-info command");
-                return 2;
-            }
-            var handler = host.Services.GetRequiredService<ChannelInfoCommand.Handler>();
-            handler.Channel = channel;
-            return await handler.InvokeAsync();
-        }
-
-    case "list-channels":
-        {
-            var limitStr = GetArg(args, "--limit");
-            var limit = int.TryParse(limitStr, out var l) ? l : 20;
-            var handler = host.Services.GetRequiredService<ListChannelsCommand.Handler>();
-            handler.Limit = limit;
-            return await handler.InvokeAsync();
-        }
-
-    case "download-file":
-        {
-            var fileId = args.Length > 1 && !args[1].StartsWith("--") ? args[1] : null;
-            var outDir = GetArg(args, "--out");
-
-            if (string.IsNullOrWhiteSpace(fileId))
-            {
-                Console.Error.WriteLine("Error: file-id argument is required for download-file command");
-                return 2;
-            }
-            if (string.IsNullOrWhiteSpace(outDir))
-            {
-                Console.Error.WriteLine("Error: --out is required for download-file command");
-                return 2;
-            }
-
-            var handler = host.Services.GetRequiredService<DownloadFileCommand.Handler>();
-            handler.FileId = fileId;
-            handler.Out = outDir;
-            return await handler.InvokeAsync();
-        }
-    default:
-        Console.Error.WriteLine($"Unknown command: {commandName ?? "(none)"}");
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("Available commands:");
-        Console.Error.WriteLine("  login             Authenticate via browser OAuth flow");
-        Console.Error.WriteLine("  logout            Clear stored credentials");
-        Console.Error.WriteLine("  whoami            Show current authentication status");
-        Console.Error.WriteLine("  auth-test         Test Slack authentication");
-        Console.Error.WriteLine("  channel-info      Get channel information");
-        Console.Error.WriteLine("  list-channels     List channels");
-        Console.Error.WriteLine("  download-file     Download a file");
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("Global options:");
-        Console.Error.WriteLine("  --token <token>   Slack API token (or set SLACK_TOKEN environment variable)");
-        return 2;
-}
-
-static string? GetArg(string[] args, string name)
+var whoamiCommand = new Command("whoami", "Show current authentication status");
+whoamiCommand.SetHandler(() =>
 {
-    for (int i = 0; i < args.Length; i++)
+    var handler = services.GetRequiredService<WhoAmICommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
+});
+
+rootCommand.AddCommand(loginCommand);
+rootCommand.AddCommand(logoutCommand);
+rootCommand.AddCommand(whoamiCommand);
+
+// Auth subcommands
+var authCommand = new Command("auth", "Authentication and testing commands");
+
+var authTestCommand = new Command("test", "Test Slack API authentication");
+authTestCommand.SetHandler(() =>
+{
+    // Check token before executing (middleware pattern)
+    var tokenStore = services.GetRequiredService<FileTokenStore>();
+    var token = tokenStore.GetTokenAsync().GetAwaiter().GetResult();
+    
+    if (token?.AccessToken == null)
     {
-        if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-            return args[i + 1];
-        if (args[i].StartsWith($"{name}=", StringComparison.OrdinalIgnoreCase))
-            return args[i].Substring(name.Length + 1);
+        Console.Error.WriteLine("Not authenticated. Run 'login' to authenticate.");
+        Environment.ExitCode = ExitCode.AuthError;
+        return;
     }
-    return null;
+    
+    var handler = services.GetRequiredService<AuthTestCommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
+});
+
+authCommand.AddCommand(authTestCommand);
+rootCommand.AddCommand(authCommand);
+
+// Channels subcommands
+var channelsCommand = new Command("channels", "Channel management commands");
+
+var channelsListCommand = new Command("list", "List channels in the workspace");
+var limitOption = new Option<int>(
+    name: "--limit",
+    description: "Maximum number of channels to return",
+    getDefaultValue: () => 20);
+channelsListCommand.AddOption(limitOption);
+channelsListCommand.SetHandler((limit) =>
+{
+    // Check token before executing
+    var tokenStore = services.GetRequiredService<FileTokenStore>();
+    var token = tokenStore.GetTokenAsync().GetAwaiter().GetResult();
+    
+    if (token?.AccessToken == null)
+    {
+        Console.Error.WriteLine("Not authenticated. Run 'login' to authenticate.");
+        Environment.ExitCode = ExitCode.AuthError;
+        return;
+    }
+    
+    var handler = services.GetRequiredService<ListChannelsCommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync(limit).GetAwaiter().GetResult();
+}, limitOption);
+
+var channelsInfoCommand = new Command("info", "Get detailed channel information");
+var channelOption = new Option<string>(
+    name: "--channel",
+    description: "Channel ID to retrieve information for")
+{
+    IsRequired = true
+};
+channelsInfoCommand.AddOption(channelOption);
+channelsInfoCommand.SetHandler((channel) =>
+{
+    // Check token before executing
+    var tokenStore = services.GetRequiredService<FileTokenStore>();
+    var token = tokenStore.GetTokenAsync().GetAwaiter().GetResult();
+    
+    if (token?.AccessToken == null)
+    {
+        Console.Error.WriteLine("Not authenticated. Run 'login' to authenticate.");
+        Environment.ExitCode = ExitCode.AuthError;
+        return;
+    }
+    
+    var handler = services.GetRequiredService<ChannelInfoCommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync(channel).GetAwaiter().GetResult();
+}, channelOption);
+
+channelsCommand.AddCommand(channelsListCommand);
+channelsCommand.AddCommand(channelsInfoCommand);
+rootCommand.AddCommand(channelsCommand);
+
+// Files subcommands
+var filesCommand = new Command("files", "File management commands");
+
+var filesDownloadCommand = new Command("download", "Download a file by ID");
+var fileIdArgument = new Argument<string>(
+    name: "file-id",
+    description: "File ID to download");
+var outOption = new Option<string>(
+    name: "--out",
+    description: "Output directory path")
+{
+    IsRequired = true
+};
+filesDownloadCommand.AddArgument(fileIdArgument);
+filesDownloadCommand.AddOption(outOption);
+filesDownloadCommand.SetHandler((fileId, outputDirectory) =>
+{
+    // Check token before executing
+    var tokenStore = services.GetRequiredService<FileTokenStore>();
+    var token = tokenStore.GetTokenAsync().GetAwaiter().GetResult();
+    
+    if (token?.AccessToken == null)
+    {
+        Console.Error.WriteLine("Not authenticated. Run 'login' to authenticate.");
+        Environment.ExitCode = ExitCode.AuthError;
+        return;
+    }
+    
+    var handler = services.GetRequiredService<DownloadFileCommand.Handler>();
+    Environment.ExitCode = handler.InvokeAsync(fileId, outputDirectory).GetAwaiter().GetResult();
+}, fileIdArgument, outOption);
+
+filesCommand.AddCommand(filesDownloadCommand);
+rootCommand.AddCommand(filesCommand);
+
+// Execute the command
+var ret = rootCommand.InvokeAsync(args).GetAwaiter().GetResult();
+return Environment.ExitCode;
+
+/// <summary>
+/// POSIX-compliant exit codes for the CLI application.
+/// </summary>
+public static class ExitCode
+{
+    /// <summary>Successful completion (EX_OK)</summary>
+    public const int Success = 0;
+    
+    /// <summary>Command line usage error (EX_USAGE)</summary>
+    public const int UsageError = 64;
+    
+    /// <summary>Service unavailable - remote API errors (EX_UNAVAILABLE)</summary>
+    public const int ServiceError = 69;
+    
+    /// <summary>Internal software error - unexpected exceptions (EX_SOFTWARE)</summary>
+    public const int InternalError = 70;
+    
+    /// <summary>Cannot create/write output file (EX_CANTCREAT)</summary>
+    public const int FileError = 73;
+    
+    /// <summary>Permission denied - authentication failures (EX_NOPERM)</summary>
+    public const int AuthError = 77;
+    
+    /// <summary>Configuration error - missing required settings (EX_CONFIG)</summary>
+    public const int ConfigError = 78;
 }

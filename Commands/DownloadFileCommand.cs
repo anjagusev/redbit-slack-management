@@ -1,42 +1,33 @@
 using Microsoft.Extensions.Logging;
+using SlackChannelExportMessages.Models;
 using SlackChannelExportMessages.Services;
 
 namespace SlackChannelExportMessages.Commands;
 
 public class DownloadFileCommand
 {
-    public class Handler
+    public class Handler(SlackApiClient slackClient, FileDownloadService fileService, ILogger<Handler> logger)
     {
-        public string FileId { get; set; } = string.Empty;
-        public string Out { get; set; } = string.Empty;
+        private readonly SlackApiClient _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
+        private readonly FileDownloadService _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
+        private readonly ILogger<Handler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        private readonly SlackApiClient _slackClient;
-        private readonly FileDownloadService _fileService;
-        private readonly ILogger<Handler> _logger;
-
-        public Handler(SlackApiClient slackClient, FileDownloadService fileService, ILogger<Handler> logger)
-        {
-            _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
-            _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        public async Task<int> InvokeAsync(CancellationToken cancellationToken = default)
+        public async Task<int> InvokeAsync(string fileId, string outputDirectory, CancellationToken cancellationToken = default)
         {
             try
             {
                 _logger.LogInformation("== files.info ==");
-                var file = await _slackClient.GetFileInfoAsync(FileId, cancellationToken);
+                var file = await _slackClient.GetFileInfoAsync(fileId, cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(file.DownloadUrl))
                 {
                     _logger.LogError("Could not find url_private/url_private_download on the file object. Check token scopes (files:read).");
-                    return 3;
+                    return ExitCode.AuthError;
                 }
 
-                await _fileService.EnsureDirectoryExistsAsync(Out);
+                await _fileService.EnsureDirectoryExistsAsync(outputDirectory);
                 var sanitizedName = _fileService.SanitizeFileName(file.Name);
-                var outPath = Path.Combine(Out, sanitizedName);
+                var outPath = Path.Combine(outputDirectory, sanitizedName);
 
                 _logger.LogInformation("Downloading: {FileName}", file.Name);
                 _logger.LogInformation("To: {OutputPath}", outPath);
@@ -46,12 +37,27 @@ public class DownloadFileCommand
                 _logger.LogInformation("Download complete.");
                 _logger.LogInformation("");
 
-                return 0;
+                return ExitCode.Success;
+            }
+            catch (SlackApiException ex)
+            {
+                _logger.LogError(ex, "Failed to download file - Slack API error");
+                return ExitCode.ServiceError;
+            }
+            catch (IOException ex)
+            {
+                _logger.LogError(ex, "Failed to download file - I/O error");
+                return ExitCode.FileError;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogError(ex, "Failed to download file - permission denied");
+                return ExitCode.FileError;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to download file");
-                return 1;
+                _logger.LogError(ex, "Failed to download file - unexpected error");
+                return ExitCode.InternalError;
             }
         }
     }

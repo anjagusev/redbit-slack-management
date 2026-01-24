@@ -1,5 +1,3 @@
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SlackChannelExportMessages.Configuration;
@@ -35,7 +33,7 @@ public class WhoAmICommand
                 if (authInfo is null)
                 {
                     _logger.LogError("Failed to verify token");
-                    return 1;
+                    return ExitCode.AuthError;
                 }
 
                 _logger.LogInformation("User: {User} ({UserId})", authInfo.User, authInfo.UserId);
@@ -55,12 +53,17 @@ public class WhoAmICommand
                     _logger.LogInformation("Token obtained: {Date:yyyy-MM-dd HH:mm:ss} UTC", storedTokenInfo.ObtainedAt);
                 }
 
-                return 0;
+                return ExitCode.Success;
+            }
+            catch (SlackApiException ex)
+            {
+                _logger.LogError(ex, "Failed to get authentication status - Slack API error");
+                return ExitCode.ServiceError;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to get authentication status");
-                return 1;
+                _logger.LogError(ex, "Failed to get authentication status - unexpected error");
+                return ExitCode.InternalError;
             }
         }
     }

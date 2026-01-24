@@ -33,12 +33,12 @@ public class LoginCommand
                 if (string.IsNullOrWhiteSpace(_options.ClientId))
                 {
                     _logger.LogError("ClientId is not configured. Set Slack:ClientId in appsettings.json.");
-                    return 1;
+                    return ExitCode.ConfigError;
                 }
                 if (string.IsNullOrWhiteSpace(_options.ClientSecret))
                 {
                     _logger.LogError("ClientSecret is not configured. Set Slack:ClientSecret in appsettings.json.");
-                    return 1;
+                    return ExitCode.ConfigError;
                 }
 
                 // Check if already logged in
@@ -49,7 +49,7 @@ public class LoginCommand
                         existingToken.UserName ?? existingToken.UserId,
                         existingToken.TeamName ?? existingToken.TeamId);
                     _logger.LogWarning("Run 'logout' first to authenticate with a different account.");
-                    return 1;
+                    return ExitCode.AuthError;
                 }
 
                 // Generate security parameters
@@ -77,7 +77,7 @@ public class LoginCommand
                 if (!callbackResult.Success)
                 {
                     _logger.LogError("Authorization failed: {Error}", callbackResult.Error);
-                    return 1;
+                    return ExitCode.AuthError;
                 }
 
                 _logger.LogInformation("Authorization received, exchanging code for token...");
@@ -96,7 +96,7 @@ public class LoginCommand
                 if (string.IsNullOrWhiteSpace(accessToken))
                 {
                     _logger.LogError("No access token received from Slack");
-                    return 1;
+                    return ExitCode.AuthError;
                 }
 
                 // Save token
@@ -122,14 +122,14 @@ public class LoginCommand
                 _logger.LogInformation("Scopes: {Scopes}",
                     string.Join(", ", storedToken.Scopes ?? []));
                 _logger.LogInformation("");
-                _logger.LogInformation("Token stored. You can now run commands without --token.");
+                _logger.LogInformation("Token stored. You can now run commands.");
 
-                return 0;
+                return ExitCode.Success;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Login failed");
-                return 1;
+                _logger.LogError(ex, "Login failed - unexpected error");
+                return ExitCode.InternalError;
             }
             finally
             {

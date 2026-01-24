@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using SlackChannelExportMessages.Models;
 using SlackChannelExportMessages.Services;
 
 namespace SlackChannelExportMessages.Commands;
@@ -25,12 +26,17 @@ public class AuthTestCommand
                 _logger.LogInformation("url: {Url}", auth.Url);
                 _logger.LogInformation("");
 
-                return 0;
+                return ExitCode.Success;
+            }
+            catch (SlackApiException)
+            {
+                _logger.LogError("Auth test failed - authentication error");
+                return ExitCode.AuthError;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Auth test failed");
-                return 1;
+                _logger.LogError(ex, "Auth test failed - unexpected error");
+                return ExitCode.InternalError;
             }
         }
     }

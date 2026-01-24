@@ -33,12 +33,12 @@ public class LogoutCommand
                 _logger.LogInformation("Note: This only removes local credentials. To revoke the token,");
                 _logger.LogInformation("visit: https://api.slack.com/apps and revoke from your app settings.");
 
-                return 0;
+                return ExitCode.Success;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Logout failed");
-                return 1;
+                _logger.LogError(ex, "Logout failed - unexpected error");
+                return ExitCode.InternalError;
             }
         }
     }
