@@ -26,6 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SlackChannelExportMessages.Commands;
+using SlackChannelExportMessages.Commands.CommandHandlers;
 using SlackChannelExportMessages.Configuration;
 using SlackChannelExportMessages.Services;
 using SlackChannelExportMessages.Services.TokenStorage;
@@ -75,13 +76,13 @@ builder.Services.AddHttpClient<SlackApiClient>(async (sp, client) =>
 builder.Services.AddSingleton<FileDownloadService>();
 
 // Command handlers
-builder.Services.AddTransient<AuthTestCommand.Handler>();
-builder.Services.AddTransient<ChannelInfoCommand.Handler>();
-builder.Services.AddTransient<ListChannelsCommand.Handler>();
-builder.Services.AddTransient<DownloadFileCommand.Handler>();
-builder.Services.AddTransient<LoginCommand.Handler>();
-builder.Services.AddTransient<LogoutCommand.Handler>();
-builder.Services.AddTransient<WhoAmICommand.Handler>();
+builder.Services.AddTransient<AuthTestCommandHandler>();
+builder.Services.AddTransient<ChannelInfoCommandHandler>();
+builder.Services.AddTransient<ListChannelsCommandHandler>();
+builder.Services.AddTransient<DownloadFileCommandHandler>();
+builder.Services.AddTransient<LoginCommandHandler>();
+builder.Services.AddTransient<LogoutCommandHandler>();
+builder.Services.AddTransient<WhoAmICommandHandler>();
 
 var host = builder.Build();
 var services = host.Services;
@@ -91,31 +92,9 @@ var services = host.Services;
 var rootCommand = new RootCommand("Slack Channel Export Messages - CLI tool for Slack API operations");
 
 // Root-level commands (authentication flow)
-var loginCommand = new Command("login", "Authenticate via browser OAuth flow");
-
-loginCommand.SetHandler(() =>
-{
-    var handler = services.GetRequiredService<LoginCommand.Handler>();
-    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
-});
-
-var logoutCommand = new Command("logout", "Clear stored credentials");
-logoutCommand.SetHandler(() =>
-{
-    var handler = services.GetRequiredService<LogoutCommand.Handler>();
-    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
-});
-
-var whoamiCommand = new Command("whoami", "Show current authentication status");
-whoamiCommand.SetHandler(() =>
-{
-    var handler = services.GetRequiredService<WhoAmICommand.Handler>();
-    Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
-});
-
-rootCommand.AddCommand(loginCommand);
-rootCommand.AddCommand(logoutCommand);
-rootCommand.AddCommand(whoamiCommand);
+rootCommand.AddCommand(new LoginCommand(services));
+rootCommand.AddCommand(new LogoutCommand(services));
+rootCommand.AddCommand(new WhoAmICommand(services));
 
 // Auth subcommands
 var authCommand = new Command("auth", "Authentication and testing commands");
@@ -134,7 +113,7 @@ authTestCommand.SetHandler(() =>
         return;
     }
     
-    var handler = services.GetRequiredService<AuthTestCommand.Handler>();
+    var handler = services.GetRequiredService<AuthTestCommandHandler>();
     Environment.ExitCode = handler.InvokeAsync().GetAwaiter().GetResult();
 });
 
@@ -163,7 +142,7 @@ channelsListCommand.SetHandler((limit) =>
         return;
     }
     
-    var handler = services.GetRequiredService<ListChannelsCommand.Handler>();
+    var handler = services.GetRequiredService<ListChannelsCommandHandler>();
     Environment.ExitCode = handler.InvokeAsync(limit).GetAwaiter().GetResult();
 }, limitOption);
 
@@ -188,7 +167,7 @@ channelsInfoCommand.SetHandler((channel) =>
         return;
     }
     
-    var handler = services.GetRequiredService<ChannelInfoCommand.Handler>();
+    var handler = services.GetRequiredService<ChannelInfoCommandHandler>();
     Environment.ExitCode = handler.InvokeAsync(channel).GetAwaiter().GetResult();
 }, channelOption);
 
@@ -224,7 +203,7 @@ filesDownloadCommand.SetHandler((fileId, outputDirectory) =>
         return;
     }
     
-    var handler = services.GetRequiredService<DownloadFileCommand.Handler>();
+    var handler = services.GetRequiredService<DownloadFileCommandHandler>();
     Environment.ExitCode = handler.InvokeAsync(fileId, outputDirectory).GetAwaiter().GetResult();
 }, fileIdArgument, outOption);
 
