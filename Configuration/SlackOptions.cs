@@ -28,4 +28,39 @@ public class SlackOptions
     /// </summary>
     [Required]
     public string BaseUri { get; set; } = "https://slack.com/api/";
+
+    /// <summary>
+    /// OAuth Client ID for browser-based authentication.
+    /// </summary>
+    public string? ClientId { get; set; }
+
+    /// <summary>
+    /// OAuth Client Secret for browser-based authentication.
+    /// </summary>
+    public string? ClientSecret { get; set; }
+
+    /// <summary>
+    /// OAuth scopes to request during authorization.
+    /// </summary>
+    public string[] Scopes { get; set; } =
+    [
+        "channels:history",
+        "channels:read",
+        "files:read",
+        "groups:history",
+        "groups:read",
+        "users:read"
+    ];
+
+    /// <summary>
+    /// Local port for OAuth callback listener.
+    /// </summary>
+    [Range(1024, 65535)]
+    public int CallbackPort { get; set; } = 8765;
+
+    /// <summary>
+    /// Timeout in seconds for waiting for OAuth callback.
+    /// </summary>
+    [Range(30, 600)]
+    public int CallbackTimeoutSeconds { get; set; } = 300;
 }

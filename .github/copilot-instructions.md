@@ -34,6 +34,34 @@ Token is NOT stored in `SlackOptions` after DI - it's manually extracted at runt
 ### HttpClient Factory Pattern
 [SlackApiClient.cs](Services/SlackApiClient.cs) receives configured HttpClient via DI. Bearer token is set in [Program.cs](Program.cs#L58-L63) after determining source. File downloads require token in request header (see `DownloadFileAsync`).
 
+### Dependency Injection Pattern
+**Always register and inject concrete classes.** This project follows a concrete-first DI philosophy with no custom interfaces:
+
+**Pattern - Concrete Classes:**
+```csharp
+// Registration in Program.cs
+builder.Services.AddTransient<SlackApiClient>();
+builder.Services.AddSingleton<FileDownloadService>();
+builder.Services.AddSingleton<FileTokenStore>();
+builder.Services.AddTransient<OAuthService>();
+
+// Constructor injection in commands/handlers
+public Handler(SlackApiClient slackClient, FileTokenStore tokenStore, ILogger<Handler> logger)
+{
+    _slackClient = slackClient;
+    _tokenStore = tokenStore;
+    _logger = logger;
+}
+```
+
+**Why no custom interfaces:**
+- YAGNI principle - don't add abstraction until actually needed
+- Single implementations don't benefit from interfaces
+- Concrete classes are simpler to understand and maintain
+- If multiple implementations are ever needed, introduce the interface then
+
+**Framework interfaces:** Always use framework-provided interfaces like `ILogger<T>`, `IOptions<T>`, `IConfiguration` - these are Microsoft's abstractions with established value.
+
 ## Key Implementation Details
 
 ### Manual CLI Parsing
@@ -43,10 +71,12 @@ Deliberately avoids System.CommandLine complexity. See [Program.cs](Program.cs#L
 - Command routing: switch statement in [Program.cs](Program.cs#L87-L150)
 
 When adding commands:
-1. Create handler in `Commands/`
-2. Register in DI ([Program.cs](Program.cs#L52-L55))
-3. Add case to switch statement
-4. Extract args with `GetArg()` plus any positional args
+1. Create handler in `Commands/` with nested `Handler` class
+2. Inject concrete service classes (`SlackApiClient`, `FileTokenStore`) and framework interfaces (`ILogger<Handler>`)
+3. Register handler in DI: `builder.Services.AddTransient<MyCommand.Handler>()` ([Program.cs](Program.cs))
+4. Register any new services as concrete classes: `builder.Services.AddTransient<MyService>()` (see Dependency Injection Pattern section)
+5. Add case to switch statement in [Program.cs](Program.cs)
+6. Extract args with `GetArg()` helper plus any positional args
 
 ### Error Handling
 Use [SlackApiException](Models/SlackApiException.cs) for Slack-specific errors. It captures:

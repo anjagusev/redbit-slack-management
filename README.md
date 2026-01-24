@@ -180,6 +180,18 @@ The application follows a clean, layered architecture with clear separation of c
 - **Structured Logging**: `ILogger` for consistent, structured log output
 - **HttpClient Factory**: Proper HttpClient management to avoid socket exhaustion
 
+#### Dependency Injection Philosophy
+
+This project uses **concrete class registration** exclusively, following the YAGNI (You Aren't Gonna Need It) principle. All services are registered directly without custom interfaces:
+
+```csharp
+builder.Services.AddTransient<SlackApiClient>();
+builder.Services.AddSingleton<FileDownloadService>();
+builder.Services.AddSingleton<FileTokenStore>();
+```
+
+Framework interfaces (`ILogger<T>`, `IOptions<T>`, `IConfiguration`) are always used as they're established Microsoft abstractions with proven benefits.
+
 ## Configuration Options
 
 The `appsettings.json` file supports the following Slack-related settings:
