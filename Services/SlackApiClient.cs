@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RedBit.Slack.Management.Configuration;
+using RedBit.Slack.Management.Extensions;
 using RedBit.Slack.Management.Models.Slack;
 
 namespace RedBit.Slack.Management.Services;
@@ -66,7 +67,7 @@ public class SlackApiClient
         if (channel == null)
             throw new SlackApiException("Channel property not found in response");
 
-        return ParseChannel(channel.Value);
+        return channel.Value.ToSlackChannel();
     }
 
     public async Task<IReadOnlyList<SlackChannel>> ListChannelsAsync(int limit = 20, bool excludeArchived = true, CancellationToken cancellationToken = default)
@@ -91,7 +92,7 @@ public class SlackApiClient
             if (string.IsNullOrWhiteSpace(id))
                 continue;
 
-            result.Add(ParseChannel(c));
+            result.Add(c.ToSlackChannel());
         }
 
         return result;
@@ -166,7 +167,7 @@ public class SlackApiClient
         {
             foreach (var m in messagesElement.Value.EnumerateArray())
             {
-                messages.Add(ParseMessage(m));
+                messages.Add(m.ToSlackMessage());
             }
         }
 
@@ -207,7 +208,7 @@ public class SlackApiClient
         {
             foreach (var m in messagesElement.Value.EnumerateArray())
             {
-                messages.Add(ParseMessage(m));
+                messages.Add(m.ToSlackMessage());
             }
         }
 
@@ -238,7 +239,7 @@ public class SlackApiClient
             {
                 foreach (var m in membersElement.Value.EnumerateArray())
                 {
-                    allUsers.Add(ParseUser(m));
+                    allUsers.Add(m.ToSlackUser());
                 }
             }
 
@@ -258,179 +259,6 @@ public class SlackApiClient
         } while (cursor != null);
 
         return allUsers;
-    }
-
-    private static SlackMessage ParseMessage(JsonElement m)
-    {
-        // Parse files
-        SlackMessageFile[]? files = null;
-        var filesElement = m.GetPropertyOrNull("files");
-        if (filesElement != null && filesElement.Value.ValueKind == JsonValueKind.Array)
-        {
-            var fileList = new List<SlackMessageFile>();
-            foreach (var f in filesElement.Value.EnumerateArray())
-            {
-                fileList.Add(new SlackMessageFile(
-                    Id: f.GetStringOrNull("id") ?? string.Empty,
-                    Name: f.GetStringOrNull("name"),
-                    Mimetype: f.GetStringOrNull("mimetype"),
-                    Size: f.GetLongOrNull("size"),
-                    UrlPrivate: f.GetStringOrNull("url_private"),
-                    UrlPrivateDownload: f.GetStringOrNull("url_private_download")
-                ));
-            }
-            files = fileList.ToArray();
-        }
-
-        // Parse reactions
-        SlackReaction[]? reactions = null;
-        var reactionsElement = m.GetPropertyOrNull("reactions");
-        if (reactionsElement != null && reactionsElement.Value.ValueKind == JsonValueKind.Array)
-        {
-            var reactionList = new List<SlackReaction>();
-            foreach (var r in reactionsElement.Value.EnumerateArray())
-            {
-                reactionList.Add(new SlackReaction(
-                    Name: r.GetStringOrNull("name") ?? string.Empty,
-                    Count: r.GetIntOrNull("count") ?? 0,
-                    Users: r.GetStringArrayOrEmpty("users")
-                ));
-            }
-            reactions = reactionList.ToArray();
-        }
-
-        return new SlackMessage(
-            Type: m.GetStringOrNull("type") ?? "message",
-            Subtype: m.GetStringOrNull("subtype"),
-            User: m.GetStringOrNull("user"),
-            Text: m.GetStringOrNull("text") ?? string.Empty,
-            Ts: m.GetStringOrNull("ts") ?? string.Empty,
-            ThreadTs: m.GetStringOrNull("thread_ts"),
-            ReplyCount: m.GetIntOrNull("reply_count"),
-            Files: files,
-            Reactions: reactions
-        );
-    }
-
-    private static SlackUser ParseUser(JsonElement u)
-    {
-        var profile = u.GetPropertyOrNull("profile");
-
-        return new SlackUser(
-            Id: u.GetStringOrNull("id") ?? string.Empty,
-            Name: u.GetStringOrNull("name"),
-            RealName: u.GetStringOrNull("real_name") ?? profile?.GetStringOrNull("real_name"),
-            DisplayName: profile?.GetStringOrNull("display_name"),
-            IsBot: u.GetBoolOrNull("is_bot") ?? false,
-            IsDeleted: u.GetBoolOrNull("deleted") ?? false
-        );
-    }
-
-    private static SlackChannel ParseChannel(JsonElement c)
-    {
-        return new SlackChannel(
-            Id: c.GetStringOrNull("id") ?? string.Empty,
-            Name: c.GetStringOrNull("name") ?? string.Empty,
-            NameNormalized: c.GetStringOrNull("name_normalized"),
-            Created: c.GetLongOrNull("created"),
-            Creator: c.GetStringOrNull("creator"),
-            Updated: c.GetLongOrNull("updated"),
-            ContextTeamId: c.GetStringOrNull("context_team_id"),
-            IsChannel: c.GetBoolOrNull("is_channel") ?? false,
-            IsGroup: c.GetBoolOrNull("is_group") ?? false,
-            IsMpim: c.GetBoolOrNull("is_mpim") ?? false,
-            IsIm: c.GetBoolOrNull("is_im") ?? false,
-            IsPrivate: c.GetBoolOrNull("is_private") ?? false,
-            IsArchived: c.GetBoolOrNull("is_archived") ?? false,
-            IsGeneral: c.GetBoolOrNull("is_general") ?? false,
-            IsShared: c.GetBoolOrNull("is_shared") ?? false,
-            IsOrgShared: c.GetBoolOrNull("is_org_shared") ?? false,
-            IsExtShared: c.GetBoolOrNull("is_ext_shared") ?? false,
-            IsPendingExtShared: c.GetBoolOrNull("is_pending_ext_shared") ?? false,
-            IsMember: c.GetBoolOrNull("is_member") ?? false,
-            NumMembers: c.GetIntOrNull("num_members"),
-            Unlinked: c.GetIntOrNull("unlinked"),
-            ParentConversation: c.GetStringOrNull("parent_conversation"),
-            Topic: ParseChannelTopic(c.GetPropertyOrNull("topic")),
-            Purpose: ParseChannelPurpose(c.GetPropertyOrNull("purpose")),
-            SharedTeamIds: c.GetStringArrayOrEmpty("shared_team_ids"),
-            PendingShared: c.GetStringArrayOrEmpty("pending_shared"),
-            PendingConnectedTeamIds: c.GetStringArrayOrEmpty("pending_connected_team_ids"),
-            PreviousNames: c.GetStringArrayOrEmpty("previous_names"),
-            Properties: ParseChannelProperties(c.GetPropertyOrNull("properties"))
-        );
-    }
-
-    private static ChannelTopic? ParseChannelTopic(JsonElement? element)
-    {
-        if (element == null) return null;
-        var e = element.Value;
-        return new ChannelTopic(
-            Value: e.GetStringOrNull("value") ?? string.Empty,
-            Creator: e.GetStringOrNull("creator"),
-            LastSet: e.GetLongOrNull("last_set")
-        );
-    }
-
-    private static ChannelPurpose? ParseChannelPurpose(JsonElement? element)
-    {
-        if (element == null) return null;
-        var e = element.Value;
-        return new ChannelPurpose(
-            Value: e.GetStringOrNull("value") ?? string.Empty,
-            Creator: e.GetStringOrNull("creator"),
-            LastSet: e.GetLongOrNull("last_set")
-        );
-    }
-
-    private static ChannelProperties? ParseChannelProperties(JsonElement? element)
-    {
-        if (element == null) return null;
-        var e = element.Value;
-        return new ChannelProperties(
-            Canvas: ParseChannelCanvas(e.GetPropertyOrNull("canvas")),
-            MeetingNotes: ParseChannelMeetingNotes(e.GetPropertyOrNull("meeting_notes")),
-            Tabs: ParseChannelTabs(e.GetPropertyOrNull("tabs"))
-        );
-    }
-
-    private static ChannelCanvas? ParseChannelCanvas(JsonElement? element)
-    {
-        if (element == null) return null;
-        var e = element.Value;
-        return new ChannelCanvas(
-            FileId: e.GetStringOrNull("file_id"),
-            IsEmpty: e.GetBoolOrNull("is_empty") ?? true,
-            QuipThreadId: e.GetStringOrNull("quip_thread_id")
-        );
-    }
-
-    private static ChannelMeetingNotes? ParseChannelMeetingNotes(JsonElement? element)
-    {
-        if (element == null) return null;
-        var e = element.Value;
-        return new ChannelMeetingNotes(
-            FileId: e.GetStringOrNull("file_id"),
-            IsEmpty: e.GetBoolOrNull("is_empty") ?? true,
-            QuipThreadId: e.GetStringOrNull("quip_thread_id")
-        );
-    }
-
-    private static ChannelTab[] ParseChannelTabs(JsonElement? element)
-    {
-        if (element == null || element.Value.ValueKind != JsonValueKind.Array)
-            return [];
-
-        var tabs = new List<ChannelTab>();
-        foreach (var tab in element.Value.EnumerateArray())
-        {
-            tabs.Add(new ChannelTab(
-                Id: tab.GetStringOrNull("id"),
-                Label: tab.GetStringOrNull("label"),
-                Type: tab.GetStringOrNull("type")
-            ));
-        }
-        return tabs.ToArray();
     }
 
     private async Task<JsonElement> CallApiAsync(string method, Dictionary<string, string?> formFields, CancellationToken cancellationToken)
@@ -491,66 +319,5 @@ public class SlackApiClient
 
         _logger.LogError("Slack API error: {Error}, Needed: {Needed}, Provided: {Provided}", err, needed, provided);
         throw new SlackApiException(sb.ToString(), err, needed, provided, warning);
-    }
-}
-
-// JSON extension methods
-internal static class JsonExtensions
-{
-    public static JsonElement? GetPropertyOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        return element.TryGetProperty(propertyName, out var prop) ? prop : null;
-    }
-
-    public static string? GetStringOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var prop)) return null;
-        return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
-    }
-
-    public static bool? GetBoolOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var prop)) return null;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
-
-    public static long? GetLongOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var prop)) return null;
-        return prop.ValueKind == JsonValueKind.Number && prop.TryGetInt64(out var value) ? value : null;
-    }
-
-    public static int? GetIntOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var prop)) return null;
-        return prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value) ? value : null;
-    }
-
-    public static string[] GetStringArrayOrEmpty(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return [];
-        if (!element.TryGetProperty(propertyName, out var prop)) return [];
-        if (prop.ValueKind != JsonValueKind.Array) return [];
-
-        var result = new List<string>();
-        foreach (var item in prop.EnumerateArray())
-        {
-            if (item.ValueKind == JsonValueKind.String)
-            {
-                var str = item.GetString();
-                if (str != null) result.Add(str);
-            }
-        }
-        return result.ToArray();
     }
 }
