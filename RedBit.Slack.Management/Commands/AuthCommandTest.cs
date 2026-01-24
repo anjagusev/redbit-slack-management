@@ -8,14 +8,14 @@ public class AuthCommandTest : BaseCommand
 
     public AuthCommandTest(IServiceProvider service) : base(service, "test", "Test Slack API authentication")
     {
-        SetAction(async t =>
+        SetAction(async (parseResults, ct) =>
         {
             // verify the token before executing
-            var exitCode = await CheckTokenAsync();
+            var exitCode = await CheckTokenAsync(ct);
             if (exitCode != ExitCode.Success) return ExitCode.AuthError;
 
             var handler = _service.GetRequiredService<AuthTestCommandHandler>();
-            return await handler.InvokeAsync();
+            return await handler.InvokeAsync(ct);
         });
     }
 }

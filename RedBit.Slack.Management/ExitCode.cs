@@ -23,4 +23,7 @@ public static class ExitCode
     
     /// <summary>Configuration error - missing required settings (EX_CONFIG)</summary>
     public const int ConfigError = 78;
+
+    /// <summary>Operation canceled by user (EX_CANCELED)</summary>
+    public const int Canceled = 130;
 }

@@ -26,6 +26,11 @@ public class AuthTestCommandHandler(SlackApiClient slackClient, ILogger<AuthTest
 
             return ExitCode.Success;
         }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Operation canceled by user");
+            return ExitCode.Canceled;
+        }
         catch (SlackApiException)
         {
             _logger.LogError("Auth test failed - authentication error");

@@ -7,10 +7,10 @@ public class LoginCommand : BaseCommand
 {
     public LoginCommand(IServiceProvider service) : base(service, "login", "Authenticate via browser OAuth flow")
     {
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             var handler = _service.GetRequiredService<LoginCommandHandler>();
-            return await handler.InvokeAsync();
+            return await handler.InvokeAsync(ct);
         });
     }
 }

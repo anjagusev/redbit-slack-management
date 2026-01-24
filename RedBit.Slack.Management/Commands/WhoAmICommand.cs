@@ -7,10 +7,10 @@ public class WhoAmICommand : BaseCommand
 {
     public WhoAmICommand(IServiceProvider service) : base(service, "whoami", "Show current authentication status")
     {
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             var handler = _service.GetRequiredService<WhoAmICommandHandler>();
-            return await handler.InvokeAsync();
+            return await handler.InvokeAsync(ct);
         });
     }
 }

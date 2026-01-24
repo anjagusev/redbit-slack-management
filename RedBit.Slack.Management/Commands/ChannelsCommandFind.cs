@@ -28,14 +28,14 @@ public class ChannelsCommandFind : BaseCommand
                 Description = "Use exact matching instead of partial matching"
             });
 
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             // verify the token before executing
-            var exitCode = await CheckTokenAsync();
+            var exitCode = await CheckTokenAsync(ct);
             if (exitCode != ExitCode.Success) return ExitCode.AuthError;
 
             var handler = _service.GetRequiredService<FindChannelsCommandHandler>();
-            return await handler.InvokeAsync(t.GetValue<string>(OptionName), t.GetValue<bool>(OptionExact));
+            return await handler.InvokeAsync(t.GetValue<string>(OptionName), t.GetValue<bool>(OptionExact), ct);
         });
     }
 }

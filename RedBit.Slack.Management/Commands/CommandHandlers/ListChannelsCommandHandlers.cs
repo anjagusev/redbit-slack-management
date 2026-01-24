@@ -30,6 +30,11 @@ public class ListChannelsCommandHandler(SlackApiClient slackClient, ILogger<List
 
             return ExitCode.Success;
         }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Operation canceled by user");
+            return ExitCode.Canceled;
+        }
         catch (SlackApiException ex)
         {
             _logger.LogError(ex, "Failed to list channels - Slack API error");

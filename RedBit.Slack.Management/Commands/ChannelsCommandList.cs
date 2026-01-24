@@ -28,14 +28,14 @@ public class ChannelsCommandList : BaseCommand
                 Description = "Exclude archived channels in the list"
             });
 
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             // verify the token before executing
-            var exitCode = await CheckTokenAsync();
+            var exitCode = await CheckTokenAsync(ct);
             if (exitCode != ExitCode.Success) return ExitCode.AuthError;
 
             var handler = _service.GetRequiredService<ListChannelsCommandHandler>();
-            return await handler.InvokeAsync(t.GetValue<int>(OptionLimit), t.GetValue<bool>(OptionExcludeArchived));
+            return await handler.InvokeAsync(t.GetValue<int>(OptionLimit), t.GetValue<bool>(OptionExcludeArchived), ct);
         });
     }
 }

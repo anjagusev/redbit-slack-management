@@ -45,6 +45,11 @@ public class FindChannelsCommandHandler(SlackApiClient slackClient, ILogger<Find
 
             return ExitCode.Success;
         }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Operation canceled by user");
+            return ExitCode.Canceled;
+        }
         catch (SlackApiException ex)
         {
             _logger.LogError(ex, "Failed to find channels - Slack API error");

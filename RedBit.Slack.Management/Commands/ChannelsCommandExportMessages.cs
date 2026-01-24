@@ -27,16 +27,17 @@ public class ChannelsCommandExportMessages : BaseCommand
         };
         Options.Add(outputOption);
 
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             // Verify the token before executing
-            var exitCode = await CheckTokenAsync();
+            var exitCode = await CheckTokenAsync(ct);
             if (exitCode != ExitCode.Success) return exitCode;
 
             var handler = _service.GetRequiredService<ExportChannelMessagesCommandHandler>();
             return await handler.InvokeAsync(
                 t.GetValue<string>(OptionChannelId)!,
-                t.GetValue<string>(OptionOutput)!);
+                t.GetValue<string>(OptionOutput)!,
+                ct);
         });
     }
 }

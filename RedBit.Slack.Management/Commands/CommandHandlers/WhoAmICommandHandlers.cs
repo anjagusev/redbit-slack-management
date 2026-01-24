@@ -53,6 +53,11 @@ public class WhoAmICommandHandler(
 
             return ExitCode.Success;
         }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Operation canceled by user");
+            return ExitCode.Canceled;
+        }
         catch (SlackApiException ex)
         {
             _logger.LogError(ex, "Failed to get authentication status - Slack API error");

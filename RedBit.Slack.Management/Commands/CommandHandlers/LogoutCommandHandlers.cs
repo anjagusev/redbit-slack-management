@@ -34,6 +34,11 @@ public class LogoutCommandHandler(FileTokenStore tokenStore, ILogger<LogoutComma
 
             return ExitCode.Success;
         }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Operation canceled by user");
+            return ExitCode.Canceled;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Logout failed - unexpected error");

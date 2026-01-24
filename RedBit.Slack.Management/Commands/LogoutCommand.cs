@@ -7,10 +7,10 @@ public class LogoutCommand : BaseCommand
 {
     public LogoutCommand(IServiceProvider service) : base(service, "logout", "Clear stored credentials")
     {
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             var handler = _service.GetRequiredService<LogoutCommandHandler>();
-            return await handler.InvokeAsync();
+            return await handler.InvokeAsync(ct);
         });
     }
 }

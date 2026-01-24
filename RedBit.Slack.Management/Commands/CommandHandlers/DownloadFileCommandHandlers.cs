@@ -47,6 +47,11 @@ public class DownloadFileCommandHandler(SlackApiClient slackClient, FileDownload
 
             return ExitCode.Success;
         }
+        catch (TaskCanceledException)
+        {
+            _logger.LogInformation("Operation canceled by user");
+            return ExitCode.Canceled;
+        }
         catch (SlackApiException ex)
         {
             _logger.LogError(ex, "Failed to download file - Slack API error");

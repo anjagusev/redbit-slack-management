@@ -15,11 +15,11 @@ public abstract class BaseCommand : Command
         _service = serviceProvider;
     }
 
-    public async Task<int> CheckTokenAsync()
+    public async Task<int> CheckTokenAsync(CancellationToken cancellationToken = default)
     {
         // Check token before executing (middleware pattern)
         var tokenStore = _service.GetRequiredService<FileTokenStore>();
-        var token = await tokenStore.GetTokenAsync();
+        var token = await tokenStore.GetTokenAsync(cancellationToken);
 
         if (token?.AccessToken == null)
         {

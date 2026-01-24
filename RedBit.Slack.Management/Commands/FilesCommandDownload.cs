@@ -24,14 +24,14 @@ public class FilesCommandDownload : BaseCommand
             Required = true,
         });
 
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             // verify the token before executing
-            var exitCode = await CheckTokenAsync();
+            var exitCode = await CheckTokenAsync(ct);
             if (exitCode != ExitCode.Success) return ExitCode.AuthError;
 
             var handler = _service.GetRequiredService<DownloadFileCommandHandler>();
-            return await handler.InvokeAsync(t.GetValue<string>(ArgumentFileId), t.GetValue<string>(OptionOut));
+            return await handler.InvokeAsync(t.GetValue<string>(ArgumentFileId), t.GetValue<string>(OptionOut), ct);
         });
     }
 }

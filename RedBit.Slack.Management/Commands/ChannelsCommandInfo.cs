@@ -21,14 +21,14 @@ public class ChannelsCommandInfo : BaseCommand
                 Required = true
             });
         
-        SetAction(async t =>
+        SetAction(async (t, ct) =>
         {
             // verify the token before executing
-            var exitCode = await CheckTokenAsync();
+            var exitCode = await CheckTokenAsync(ct);
             if (exitCode != ExitCode.Success) return ExitCode.AuthError;
 
             var handler = _service.GetRequiredService<ChannelInfoCommandHandler>();
-            return await handler.InvokeAsync(t.GetValue<string>(OptionChannelId));
+            return await handler.InvokeAsync(t.GetValue<string>(OptionChannelId), ct);
         });
     }
 }
