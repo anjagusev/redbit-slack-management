@@ -9,8 +9,14 @@ public class ChannelInfoCommandHandler(SlackApiClient slackClient, ILogger<Chann
     private readonly SlackApiClient _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
     private readonly ILogger<ChannelInfoCommandHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public async Task<int> InvokeAsync(string channel, CancellationToken cancellationToken = default)
+    public async Task<int> InvokeAsync(string? channel, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(channel))
+        {
+            _logger.LogError("Channel ID or name must be provided.");
+            return ExitCode.UsageError;
+        }
+
         try
         {
             _logger.LogInformation("== Channel Info ==");

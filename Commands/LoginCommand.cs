@@ -4,17 +4,14 @@ using System.CommandLine;
 
 namespace SlackChannelExportMessages.Commands;
 
-public class LoginCommand : Command
+public class LoginCommand : BaseCommand
 {
-    private readonly IServiceProvider _service;
-
-    public LoginCommand(IServiceProvider service) : base("login", "Authenticate via browser OAuth flow")
+    public LoginCommand(IServiceProvider service) : base(service, "login", "Authenticate via browser OAuth flow")
     {
-        _service = service;
-        this.SetHandler(async () =>
+        SetAction(async t =>
         {
             var handler = _service.GetRequiredService<LoginCommandHandler>();
-            Environment.ExitCode = await handler.InvokeAsync();
+            return await handler.InvokeAsync();
         });
     }
 }

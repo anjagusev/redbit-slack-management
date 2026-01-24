@@ -4,17 +4,14 @@ using System.CommandLine;
 
 namespace SlackChannelExportMessages.Commands;
 
-public class LogoutCommand : Command
+public class LogoutCommand : BaseCommand
 {
-    private readonly IServiceProvider _service;
-
-    public LogoutCommand(IServiceProvider service) : base("logout", "Clear stored credentials")
+    public LogoutCommand(IServiceProvider service) : base(service, "logout", "Clear stored credentials")
     {
-        _service = service;
-        this.SetHandler(async () =>
+        SetAction(async t =>
         {
             var handler = _service.GetRequiredService<LogoutCommandHandler>();
-            Environment.ExitCode = await handler.InvokeAsync();
+            return await handler.InvokeAsync();
         });
     }
 }

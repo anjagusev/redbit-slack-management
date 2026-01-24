@@ -10,8 +10,18 @@ public class DownloadFileCommandHandler(SlackApiClient slackClient, FileDownload
     private readonly FileDownloadService _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
     private readonly ILogger<DownloadFileCommandHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public async Task<int> InvokeAsync(string fileId, string outputDirectory, CancellationToken cancellationToken = default)
+    public async Task<int> InvokeAsync(string? fileId, string? outputDirectory, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(fileId))
+        {
+            _logger.LogError("File ID must be provided.");
+            return ExitCode.UsageError;
+        }
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            outputDirectory = Directory.GetCurrentDirectory();
+        }
+
         try
         {
             _logger.LogInformation("== files.info ==");

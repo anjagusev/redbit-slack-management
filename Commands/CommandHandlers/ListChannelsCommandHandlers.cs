@@ -9,12 +9,12 @@ public class ListChannelsCommandHandler(SlackApiClient slackClient, ILogger<List
     private readonly SlackApiClient _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
     private readonly ILogger<ListChannelsCommandHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public async Task<int> InvokeAsync(int limit = 20, CancellationToken cancellationToken = default)
+    public async Task<int> InvokeAsync(int limit = 20, bool excludeArchived = false, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation("== conversations.list (first page) ==");
-            var channels = await _slackClient.ListChannelsAsync(limit, excludeArchived: true, cancellationToken);
+            var channels = await _slackClient.ListChannelsAsync(limit, excludeArchived: excludeArchived, cancellationToken);
 
             _logger.LogInformation("Total Channels Found: {ChannelCount}", channels.Count);
             var count = 0;
@@ -22,7 +22,7 @@ public class ListChannelsCommandHandler(SlackApiClient slackClient, ILogger<List
             {
                 var visibility = channel.IsPrivate ? "(private)" : "(public) ";
                 _logger.LogInformation("{ChannelId}  {Visibility}  {Name}", channel.Id, visibility, channel.Name);
-                await Task.Delay(10, cancellationToken); // Slight delay to improve log readability
+                await Task.Delay(1, cancellationToken); // Slight delay to improve log readability
                 count++;
             }
             _logger.LogInformation("Total Channels counted: {ChannelCount}", count);

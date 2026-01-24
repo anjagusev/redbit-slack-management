@@ -4,17 +4,14 @@ using System.CommandLine;
 
 namespace SlackChannelExportMessages.Commands;
 
-public class WhoAmICommand : Command
+public class WhoAmICommand : BaseCommand
 {
-    private readonly IServiceProvider _service;
-
-    public WhoAmICommand(IServiceProvider service) : base("whoami", "Show current authentication status")
+    public WhoAmICommand(IServiceProvider service) : base(service, "whoami", "Show current authentication status")
     {
-        _service = service;
-        this.SetHandler(async () =>
+        SetAction(async t =>
         {
             var handler = _service.GetRequiredService<WhoAmICommandHandler>();
-            Environment.ExitCode = await handler.InvokeAsync();
+            return await handler.InvokeAsync();
         });
     }
 }
