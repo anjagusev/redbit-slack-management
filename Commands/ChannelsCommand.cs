@@ -7,5 +7,6 @@ public class ChannelsCommand : BaseCommand
         Add(new ChannelsCommandList(service));
         Add(new ChannelsCommandInfo(service));
         Add(new ChannelsCommandFind(service));
+        Add(new ChannelsCommandExportMessages(service));
     }
 }

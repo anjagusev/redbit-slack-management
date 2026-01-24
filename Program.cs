@@ -80,6 +80,7 @@ builder.Services.AddTransient<AuthTestCommandHandler>();
 builder.Services.AddTransient<ChannelInfoCommandHandler>();
 builder.Services.AddTransient<ListChannelsCommandHandler>();
 builder.Services.AddTransient<FindChannelsCommandHandler>();
+builder.Services.AddTransient<ExportChannelMessagesCommandHandler>();
 builder.Services.AddTransient<DownloadFileCommandHandler>();
 builder.Services.AddTransient<LoginCommandHandler>();
 builder.Services.AddTransient<LogoutCommandHandler>();

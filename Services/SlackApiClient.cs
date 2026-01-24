@@ -138,6 +138,194 @@ public class SlackApiClient
         _logger.LogInformation("File download complete: {OutputPath}", outputPath);
     }
 
+    public async Task<(List<SlackMessage> Messages, string? NextCursor)> GetConversationHistoryAsync(
+        string channelId,
+        int limit = 200,
+        string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(channelId))
+            throw new ArgumentException("Channel ID cannot be null or whitespace.", nameof(channelId));
+
+        _logger.LogDebug("Getting conversation history for {ChannelId} (limit: {Limit}, cursor: {Cursor})", channelId, limit, cursor);
+
+        var parameters = new Dictionary<string, string?>
+        {
+            ["channel"] = channelId,
+            ["limit"] = limit.ToString()
+        };
+
+        if (!string.IsNullOrWhiteSpace(cursor))
+            parameters["cursor"] = cursor;
+
+        var response = await CallApiAsync("conversations.history", parameters, cancellationToken);
+
+        var messages = new List<SlackMessage>();
+        var messagesElement = response.GetPropertyOrNull("messages");
+        if (messagesElement != null && messagesElement.Value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var m in messagesElement.Value.EnumerateArray())
+            {
+                messages.Add(ParseMessage(m));
+            }
+        }
+
+        string? nextCursor = null;
+        var responseMetadata = response.GetPropertyOrNull("response_metadata");
+        if (responseMetadata != null)
+        {
+            nextCursor = responseMetadata.Value.GetStringOrNull("next_cursor");
+            if (string.IsNullOrWhiteSpace(nextCursor))
+                nextCursor = null;
+        }
+
+        return (messages, nextCursor);
+    }
+
+    public async Task<List<SlackMessage>> GetConversationRepliesAsync(
+        string channelId,
+        string threadTs,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(channelId))
+            throw new ArgumentException("Channel ID cannot be null or whitespace.", nameof(channelId));
+        if (string.IsNullOrWhiteSpace(threadTs))
+            throw new ArgumentException("Thread timestamp cannot be null or whitespace.", nameof(threadTs));
+
+        _logger.LogDebug("Getting conversation replies for {ChannelId}, thread {ThreadTs}", channelId, threadTs);
+
+        var response = await CallApiAsync("conversations.replies",
+            new Dictionary<string, string?>
+            {
+                ["channel"] = channelId,
+                ["ts"] = threadTs
+            }, cancellationToken);
+
+        var messages = new List<SlackMessage>();
+        var messagesElement = response.GetPropertyOrNull("messages");
+        if (messagesElement != null && messagesElement.Value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var m in messagesElement.Value.EnumerateArray())
+            {
+                messages.Add(ParseMessage(m));
+            }
+        }
+
+        return messages;
+    }
+
+    public async Task<List<SlackUser>> ListUsersAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Listing all users");
+
+        var allUsers = new List<SlackUser>();
+        string? cursor = null;
+
+        do
+        {
+            var parameters = new Dictionary<string, string?>
+            {
+                ["limit"] = "200"
+            };
+
+            if (!string.IsNullOrWhiteSpace(cursor))
+                parameters["cursor"] = cursor;
+
+            var response = await CallApiAsync("users.list", parameters, cancellationToken);
+
+            var membersElement = response.GetPropertyOrNull("members");
+            if (membersElement != null && membersElement.Value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var m in membersElement.Value.EnumerateArray())
+                {
+                    allUsers.Add(ParseUser(m));
+                }
+            }
+
+            cursor = null;
+            var responseMetadata = response.GetPropertyOrNull("response_metadata");
+            if (responseMetadata != null)
+            {
+                cursor = responseMetadata.Value.GetStringOrNull("next_cursor");
+                if (string.IsNullOrWhiteSpace(cursor))
+                    cursor = null;
+            }
+
+            // HACK Small delay for rate limiting, should use Microsoft.Extensions.Http.Resilience instead
+            if (cursor != null)
+                await Task.Delay(100, cancellationToken);
+
+        } while (cursor != null);
+
+        return allUsers;
+    }
+
+    private static SlackMessage ParseMessage(JsonElement m)
+    {
+        // Parse files
+        SlackMessageFile[]? files = null;
+        var filesElement = m.GetPropertyOrNull("files");
+        if (filesElement != null && filesElement.Value.ValueKind == JsonValueKind.Array)
+        {
+            var fileList = new List<SlackMessageFile>();
+            foreach (var f in filesElement.Value.EnumerateArray())
+            {
+                fileList.Add(new SlackMessageFile(
+                    Id: f.GetStringOrNull("id") ?? string.Empty,
+                    Name: f.GetStringOrNull("name"),
+                    Mimetype: f.GetStringOrNull("mimetype"),
+                    Size: f.GetLongOrNull("size"),
+                    UrlPrivate: f.GetStringOrNull("url_private"),
+                    UrlPrivateDownload: f.GetStringOrNull("url_private_download")
+                ));
+            }
+            files = fileList.ToArray();
+        }
+
+        // Parse reactions
+        SlackReaction[]? reactions = null;
+        var reactionsElement = m.GetPropertyOrNull("reactions");
+        if (reactionsElement != null && reactionsElement.Value.ValueKind == JsonValueKind.Array)
+        {
+            var reactionList = new List<SlackReaction>();
+            foreach (var r in reactionsElement.Value.EnumerateArray())
+            {
+                reactionList.Add(new SlackReaction(
+                    Name: r.GetStringOrNull("name") ?? string.Empty,
+                    Count: r.GetIntOrNull("count") ?? 0,
+                    Users: r.GetStringArrayOrEmpty("users")
+                ));
+            }
+            reactions = reactionList.ToArray();
+        }
+
+        return new SlackMessage(
+            Type: m.GetStringOrNull("type") ?? "message",
+            Subtype: m.GetStringOrNull("subtype"),
+            User: m.GetStringOrNull("user"),
+            Text: m.GetStringOrNull("text") ?? string.Empty,
+            Ts: m.GetStringOrNull("ts") ?? string.Empty,
+            ThreadTs: m.GetStringOrNull("thread_ts"),
+            ReplyCount: m.GetIntOrNull("reply_count"),
+            Files: files,
+            Reactions: reactions
+        );
+    }
+
+    private static SlackUser ParseUser(JsonElement u)
+    {
+        var profile = u.GetPropertyOrNull("profile");
+
+        return new SlackUser(
+            Id: u.GetStringOrNull("id") ?? string.Empty,
+            Name: u.GetStringOrNull("name"),
+            RealName: u.GetStringOrNull("real_name") ?? profile?.GetStringOrNull("real_name"),
+            DisplayName: profile?.GetStringOrNull("display_name"),
+            IsBot: u.GetBoolOrNull("is_bot") ?? false,
+            IsDeleted: u.GetBoolOrNull("deleted") ?? false
+        );
+    }
+
     private static SlackChannel ParseChannel(JsonElement c)
     {
         return new SlackChannel(
