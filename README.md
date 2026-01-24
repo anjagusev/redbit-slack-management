@@ -2,6 +2,8 @@
 
 A .NET CLI tool for interacting with the Slack API to test authentication, list channels, retrieve channel information, and download files.
 
+🚨 NOTE: This was written for internal purposes for RedBit to allow us to download all messages in a channel. Works for our purposes and a tool that we would have never written before AI tools. Primiarily used Claude Code. It works for us, if you encounter issues, do not expect a fix 😜
+
 ## Features
 
 - **OAuth authentication**: Browser-based OAuth login flow with secure token storage
@@ -365,26 +367,14 @@ dotnet publish -c Release -r osx-x64 --self-contained
 
 The compiled executable will be in `bin/Release/net10.0/<runtime>/publish/`.
 
-## Contributing
-
-Contributions are welcome! The architecture makes it easy to:
-
-1. **Add new commands**: Create a new handler in the `Commands/` folder
-2. **Extend the API client**: Add new methods to `SlackApiClient`
-3. **Add new models**: Create strongly-typed models in the `Models/` folder
-4. **Improve error handling**: Enhance `SlackApiException` or add new exception types
-
-## License
-
-[Specify your license here]
-
 ## Support
 
 For issues or questions:
 - Check the [Slack API documentation](https://api.slack.com/)
 - Review the error messages and logs
 - Ensure your token has the required OAuth scopes
+- Do not open up an issue and try to figure it out
 
 ---
 
-**Note**: This tool is for educational and development purposes. Always follow Slack's API terms of service and rate limiting guidelines.
+**Note**: This tool is an internal tool built for RedBit Development, use at your own risk and if something is broken, the code is there 😜
