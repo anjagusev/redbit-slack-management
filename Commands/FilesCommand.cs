@@ -1,6 +1,4 @@
-﻿using System.CommandLine;
-
-namespace SlackChannelExportMessages.Commands;
+﻿namespace SlackChannelExportMessages.Commands;
 
 public class FilesCommand : BaseCommand
 {

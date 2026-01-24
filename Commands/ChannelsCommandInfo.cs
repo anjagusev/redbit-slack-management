@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using SlackChannelExportMessages.Commands.CommandHandlers;
-using SlackChannelExportMessages.Services.TokenStorage;
 using System.CommandLine;
 
 namespace SlackChannelExportMessages.Commands;
