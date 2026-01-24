@@ -1,3 +1,5 @@
 <Solution>
-  <Project Path="RedBit.Slack.Management.csproj" />
+  <Project Path="RedBit.CommandLine.OAuth.Slack/RedBit.CommandLine.OAuth.Slack.csproj" />
+  <Project Path="RedBit.CommandLine.OAuth/RedBit.CommandLine.OAuth.csproj" />
+  <Project Path="RedBit.Slack.Management/RedBit.Slack.Management.csproj" />
 </Solution>
