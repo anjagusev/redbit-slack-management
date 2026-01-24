@@ -12,11 +12,7 @@
 //   dotnet run -- download-file F0123456789 --out ./downloads --token xoxp-...
 //
 // Token sources (first match wins):
-//   1) --token <value>
-//   2) SLACK_TOKEN environment variable
-//   3) ~/.slack-cli/credentials.json (stored OAuth token)
-//   4) User Secrets (Slack:Token)
-//   5) appsettings.json (Slack:Token)
+//   1) ~/.slack-cli/credentials.json (stored OAuth token)
 //
 // Notes:
 // - It calls Slack Web API endpoints over HTTPS.
@@ -37,9 +33,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-    .AddUserSecrets<Program>()
-    .AddEnvironmentVariables(prefix: "SLACK_");
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
 
 builder.Services.Configure<SlackOptions>(builder.Configuration.GetSection(SlackOptions.SectionName));
 
@@ -65,12 +59,14 @@ builder.Services.AddTransient<OAuthCallbackListener>();
 builder.Services.AddHttpClient<OAuthService>();
 
 // Services
-builder.Services.AddHttpClient<SlackApiClient>((sp, client) =>
+builder.Services.AddHttpClient<SlackApiClient>(async (sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<SlackOptions>>().Value;
 
-    // Get token from options, command line, or environment variable
-    var token = options.Token ?? Environment.GetEnvironmentVariable("SLACK_TOKEN");
+    // get the token if available
+    var tokenStore = sp.GetRequiredService<FileTokenStore>();
+    var token = (await tokenStore.GetTokenAsync())?.AccessToken;
+
     if (!string.IsNullOrWhiteSpace(token))
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -90,73 +86,22 @@ builder.Services.AddTransient<WhoAmICommand.Handler>();
 
 var host = builder.Build();
 
-// Simple command line parser (avoiding System.CommandLine 2.0 API complexity)
-var commandName = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : null;
-var explicitToken = GetArg(args, "--token");
+// Check if token exists, fail fast if it does not
+var tokenStore = host.Services.GetRequiredService<FileTokenStore>();
+var token = await tokenStore.GetTokenAsync();
 
-// Commands that don't require a token
-var noTokenCommands = new[] { "login", "logout", "whoami" };
-
-// Resolve token using priority order
-string? token = null;
-string? tokenSource = null;
-
-if (!string.IsNullOrWhiteSpace(explicitToken))
-{
-    token = explicitToken;
-    tokenSource = "--token argument";
-}
-else if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SLACK_TOKEN")))
-{
-    token = Environment.GetEnvironmentVariable("SLACK_TOKEN");
-    tokenSource = "SLACK_TOKEN environment variable";
-}
-else
-{
-    // Try to get stored OAuth token
-    var tokenStore = host.Services.GetRequiredService<FileTokenStore>();
-    var storedToken = await tokenStore.GetTokenAsync();
-    if (storedToken is not null)
-    {
-        token = storedToken.AccessToken;
-        tokenSource = "stored credentials";
-    }
-    else
-    {
-        // Fall back to config
-        var options = host.Services.GetRequiredService<IOptions<SlackOptions>>().Value;
-        if (!string.IsNullOrWhiteSpace(options.Token))
-        {
-            token = options.Token;
-            tokenSource = "appsettings.json";
-        }
-    }
-}
-
-// Check if command requires token
-var requiresToken = !noTokenCommands.Contains(commandName?.ToLowerInvariant());
-
-if (requiresToken && string.IsNullOrWhiteSpace(token))
+if (token == null || string.IsNullOrWhiteSpace(token?.AccessToken))
 {
     Console.Error.WriteLine("Missing token. Options:");
     Console.Error.WriteLine("  1. Run 'login' for browser-based OAuth authentication");
-    Console.Error.WriteLine("  2. Provide --token <xoxp|xoxb> argument");
-    Console.Error.WriteLine("  3. Set SLACK_TOKEN environment variable");
     Console.Error.WriteLine();
     Console.Error.WriteLine("Usage: dotnet run -- <command> [options]");
     Console.Error.WriteLine("Commands: login, logout, whoami, auth-test, channel-info, list-channels, download-file");
-    Console.Error.WriteLine("Use --help for more information.");
     return 2;
 }
 
-// Update SlackApiClient with resolved token
-if (!string.IsNullOrWhiteSpace(token))
-{
-    var slackClient = host.Services.GetRequiredService<SlackApiClient>();
-    slackClient.SetAuthToken(token);
-}
-
 // Route to command handlers
+var commandName = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : null;
 switch (commandName?.ToLowerInvariant())
 {
     case "login":
@@ -174,8 +119,6 @@ switch (commandName?.ToLowerInvariant())
     case "whoami":
         {
             var handler = host.Services.GetRequiredService<WhoAmICommand.Handler>();
-            handler.ExplicitToken = explicitToken;
-            handler.TokenSource = tokenSource;
             return await handler.InvokeAsync();
         }
 
@@ -228,7 +171,6 @@ switch (commandName?.ToLowerInvariant())
             handler.Out = outDir;
             return await handler.InvokeAsync();
         }
-
     default:
         Console.Error.WriteLine($"Unknown command: {commandName ?? "(none)"}");
         Console.Error.WriteLine();

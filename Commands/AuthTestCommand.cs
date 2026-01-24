@@ -5,16 +5,10 @@ namespace SlackChannelExportMessages.Commands;
 
 public class AuthTestCommand
 {
-    public class Handler
+    public class Handler(SlackApiClient slackClient, ILogger<AuthTestCommand.Handler> logger)
     {
-        private readonly SlackApiClient _slackClient;
-        private readonly ILogger<Handler> _logger;
-
-        public Handler(SlackApiClient slackClient, ILogger<Handler> logger)
-        {
-            _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private readonly SlackApiClient _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
+        private readonly ILogger<Handler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<int> InvokeAsync(CancellationToken cancellationToken = default)
         {

@@ -10,27 +10,18 @@ namespace SlackChannelExportMessages.Commands;
 
 public class LoginCommand
 {
-    public class Handler
+    public class Handler(
+        OAuthService oauthService,
+        OAuthCallbackListener callbackListener,
+        FileTokenStore tokenStore,
+        IOptions<SlackOptions> options,
+        ILogger<LoginCommand.Handler> logger)
     {
-        private readonly OAuthService _oauthService;
-        private readonly OAuthCallbackListener _callbackListener;
-        private readonly FileTokenStore _tokenStore;
-        private readonly SlackOptions _options;
-        private readonly ILogger<Handler> _logger;
-
-        public Handler(
-            OAuthService oauthService,
-            OAuthCallbackListener callbackListener,
-            FileTokenStore tokenStore,
-            IOptions<SlackOptions> options,
-            ILogger<Handler> logger)
-        {
-            _oauthService = oauthService ?? throw new ArgumentNullException(nameof(oauthService));
-            _callbackListener = callbackListener ?? throw new ArgumentNullException(nameof(callbackListener));
-            _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-            _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private readonly OAuthService _oauthService = oauthService ?? throw new ArgumentNullException(nameof(oauthService));
+        private readonly OAuthCallbackListener _callbackListener = callbackListener ?? throw new ArgumentNullException(nameof(callbackListener));
+        private readonly FileTokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        private readonly SlackOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        private readonly ILogger<Handler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<int> InvokeAsync(CancellationToken cancellationToken = default)
         {

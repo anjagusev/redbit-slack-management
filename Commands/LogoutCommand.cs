@@ -5,16 +5,10 @@ namespace SlackChannelExportMessages.Commands;
 
 public class LogoutCommand
 {
-    public class Handler
+    public class Handler(FileTokenStore tokenStore, ILogger<LogoutCommand.Handler> logger)
     {
-        private readonly FileTokenStore _tokenStore;
-        private readonly ILogger<Handler> _logger;
-
-        public Handler(FileTokenStore tokenStore, ILogger<Handler> logger)
-        {
-            _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private readonly FileTokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        private readonly ILogger<Handler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<int> InvokeAsync(CancellationToken cancellationToken = default)
         {

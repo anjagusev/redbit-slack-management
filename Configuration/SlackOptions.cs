@@ -7,11 +7,6 @@ public class SlackOptions
     public const string SectionName = "Slack";
 
     /// <summary>
-    /// Slack API token (xoxp- or xoxb-). Can be overridden by command-line --token option.
-    /// </summary>
-    public string? Token { get; set; }
-
-    /// <summary>
     /// HTTP timeout for Slack API calls in seconds.
     /// </summary>
     [Range(1, 300)]
@@ -42,15 +37,7 @@ public class SlackOptions
     /// <summary>
     /// OAuth scopes to request during authorization.
     /// </summary>
-    public string[] Scopes { get; set; } =
-    [
-        "channels:history",
-        "channels:read",
-        "files:read",
-        "groups:history",
-        "groups:read",
-        "users:read"
-    ];
+    public string[] Scopes { get; set; } = Array.Empty<string>();
 
     /// <summary>
     /// Local port for OAuth callback listener.

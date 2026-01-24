@@ -1,6 +1,8 @@
 using System.Net;
-using System.Text;
 using System.Web;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SlackChannelExportMessages.Configuration;
@@ -8,13 +10,13 @@ using SlackChannelExportMessages.Configuration;
 namespace SlackChannelExportMessages.Services;
 
 /// <summary>
-/// Local HTTP server that listens for OAuth callbacks from Slack.
+/// Local HTTPS server using Kestrel that listens for OAuth callbacks from Slack.
+/// Kestrel automatically uses dev certificates without manual binding.
 /// </summary>
 public class OAuthCallbackListener : IDisposable
 {
     private readonly SlackOptions _options;
     private readonly ILogger<OAuthCallbackListener> _logger;
-    private readonly HttpListener _listener;
     private bool _disposed;
 
     public OAuthCallbackListener(
@@ -23,7 +25,6 @@ public class OAuthCallbackListener : IDisposable
     {
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _listener = new HttpListener();
     }
 
     /// <summary>
@@ -34,60 +35,84 @@ public class OAuthCallbackListener : IDisposable
         string expectedState,
         CancellationToken cancellationToken = default)
     {
-        var prefix = _options.GetCallbackBaseUrl();
-        _listener.Prefixes.Add(prefix);
+        var port = _options.CallbackPort;
+        var resultTcs = new TaskCompletionSource<OAuthCallbackResult>();
+
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(kestrel =>
+        {
+            kestrel.ListenLocalhost(port, listenOptions =>
+            {
+                listenOptions.UseHttps();
+            });
+        });
+
+        var app = builder.Build();
+
+        app.MapGet("/callback", async (HttpContext context) =>
+        {
+            var query = HttpUtility.ParseQueryString(context.Request.QueryString.Value ?? string.Empty);
+            var code = query["code"];
+            var state = query["state"];
+            var error = query["error"];
+
+            _logger.LogDebug("Received callback - code: {HasCode}, state: {HasState}, error: {Error}",
+                !string.IsNullOrEmpty(code), !string.IsNullOrEmpty(state), error);
+
+            OAuthCallbackResult result;
+
+            // Handle error response from Slack
+            if (!string.IsNullOrEmpty(error))
+            {
+                result = OAuthCallbackResult.Failed($"Authorization denied: {error}");
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(GetErrorHtml(error));
+            }
+            // Validate state parameter
+            else if (string.IsNullOrEmpty(state) || state != expectedState)
+            {
+                result = OAuthCallbackResult.Failed("State parameter mismatch");
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(GetErrorHtml("State mismatch - possible CSRF attack"));
+            }
+            // Validate authorization code
+            else if (string.IsNullOrEmpty(code))
+            {
+                result = OAuthCallbackResult.Failed("No authorization code received");
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(GetErrorHtml("No authorization code received"));
+            }
+            // Success
+            else
+            {
+                result = OAuthCallbackResult.Succeeded(code);
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(GetSuccessHtml());
+            }
+
+            resultTcs.TrySetResult(result);
+        });
 
         try
         {
-            _listener.Start();
-            _logger.LogDebug("OAuth callback listener started on {Prefix}", prefix);
+            await app.StartAsync(cancellationToken);
+            _logger.LogDebug("OAuth callback listener started on https://localhost:{Port}/", port);
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(_options.CallbackTimeoutSeconds));
 
-            var context = await _listener.GetContextAsync().WaitAsync(cts.Token);
-            var request = context.Request;
-            var response = context.Response;
-
-            try
+            using var registration = cts.Token.Register(() =>
             {
-                var query = HttpUtility.ParseQueryString(request.Url?.Query ?? string.Empty);
-                var code = query["code"];
-                var state = query["state"];
-                var error = query["error"];
+                resultTcs.TrySetResult(OAuthCallbackResult.Failed("Callback timed out"));
+            });
 
-                _logger.LogDebug("Received callback - code: {HasCode}, state: {HasState}, error: {Error}",
-                    !string.IsNullOrEmpty(code), !string.IsNullOrEmpty(state), error);
+            var result = await resultTcs.Task;
 
-                // Handle error response from Slack
-                if (!string.IsNullOrEmpty(error))
-                {
-                    await SendResponseAsync(response, GetErrorHtml(error));
-                    return OAuthCallbackResult.Failed($"Authorization denied: {error}");
-                }
+            // Give the browser time to receive the response before shutting down
+            await Task.Delay(500, CancellationToken.None);
 
-                // Validate state parameter
-                if (string.IsNullOrEmpty(state) || state != expectedState)
-                {
-                    await SendResponseAsync(response, GetErrorHtml("State mismatch - possible CSRF attack"));
-                    return OAuthCallbackResult.Failed("State parameter mismatch");
-                }
-
-                // Validate authorization code
-                if (string.IsNullOrEmpty(code))
-                {
-                    await SendResponseAsync(response, GetErrorHtml("No authorization code received"));
-                    return OAuthCallbackResult.Failed("No authorization code received");
-                }
-
-                // Success
-                await SendResponseAsync(response, GetSuccessHtml());
-                return OAuthCallbackResult.Succeeded(code);
-            }
-            finally
-            {
-                response.Close();
-            }
+            return result;
         }
         catch (OperationCanceledException)
         {
@@ -95,24 +120,24 @@ public class OAuthCallbackListener : IDisposable
                 _options.CallbackTimeoutSeconds);
             return OAuthCallbackResult.Failed("Callback timed out");
         }
-        catch (HttpListenerException ex)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, "HTTP listener error");
-            return OAuthCallbackResult.Failed($"Listener error: {ex.Message}");
+            _logger.LogError(ex, "Kestrel server error");
+            return OAuthCallbackResult.Failed($"Server error: {ex.Message}");
         }
         finally
         {
-            Stop();
+            try
+            {
+                await app.StopAsync(CancellationToken.None);
+                _logger.LogDebug("OAuth callback listener stopped");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error stopping Kestrel server");
+            }
+            await app.DisposeAsync();
         }
-    }
-
-    private static async Task SendResponseAsync(HttpListenerResponse response, string html)
-    {
-        var buffer = Encoding.UTF8.GetBytes(html);
-        response.ContentType = "text/html; charset=utf-8";
-        response.ContentLength64 = buffer.Length;
-        response.StatusCode = 200;
-        await response.OutputStream.WriteAsync(buffer);
     }
 
     private static string GetSuccessHtml() => """
@@ -167,28 +192,11 @@ public class OAuthCallbackListener : IDisposable
         </html>
         """;
 
-    private void Stop()
-    {
-        try
-        {
-            if (_listener.IsListening)
-            {
-                _listener.Stop();
-                _logger.LogDebug("OAuth callback listener stopped");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error stopping listener");
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        Stop();
-        _listener.Close();
+        // Kestrel cleanup handled in WaitForCallbackAsync
     }
 }
 

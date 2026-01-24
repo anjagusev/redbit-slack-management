@@ -138,11 +138,6 @@ public class SlackApiClient
         _logger.LogInformation("Downloading file from {FileUrl} to {OutputPath}", fileUrl, outputPath);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, fileUrl);
-        // Slack requires Bearer token for file downloads
-        if (_httpClient.DefaultRequestHeaders.Authorization != null)
-        {
-            request.Headers.Authorization = _httpClient.DefaultRequestHeaders.Authorization;
-        }
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();

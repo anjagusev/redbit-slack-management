@@ -2,7 +2,7 @@
   "profiles": {
     "slack-channel-export-messages": {
       "commandName": "Project",
-      "commandLineArgs": "login"
+      "commandLineArgs": "list-channels --limit 999"
     }
   }
 }
