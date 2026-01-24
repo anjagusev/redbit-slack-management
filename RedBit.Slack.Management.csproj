@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>slack_channel_export_messages</RootNamespace>
+    <RootNamespace>RedBit.Slack.Management</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>7d8c5f2e-4a91-4b3d-9e7f-1c6a8b2d5e3f</UserSecretsId>
