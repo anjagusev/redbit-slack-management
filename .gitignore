@@ -1,0 +1,81 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options directory
+.vs/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio user-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Local History for Visual Studio
+.localhistory/
+
+# BeatPulse healthcheck temp database
+healthchecksdb
+
+# Backup & swap files
+*.bak
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+
+# Nuget personal access tokens and Credentials
+nuget.config
+
+# User Secrets
+secrets.json
+user-secrets.json
+
+# dotnet user-secrets folder
+.user-secrets/
+
+# Test Results
+TestResults/
+*.trx
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE specific files
+.editorconfig.user
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,355 +1,171 @@
 // Program.cs
-// .NET 10 / C# 14 single-file CLI for testing Slack authentication and basic API calls.
+// .NET 10 / C# 14 CLI for Slack authentication and basic API operations.
 //
 // Usage examples:
-//   dotnet run -- --token xoxp-...                 (or xoxb-...)
-//   dotnet run -- --token xoxp-... --channel C0123456789
-//   dotnet run -- --token xoxp-... --download-file F0123456789 --out ./downloads
+//   dotnet run -- auth-test --token xoxp-...
+//   dotnet run -- channel-info --channel C0123456789 --token xoxp-...
+//   dotnet run -- list-channels --token xoxp-...
+//   dotnet run -- download-file F0123456789 --out ./downloads --token xoxp-...
 //
 // Token sources (first match wins):
 //   1) --token <value>
 //   2) SLACK_TOKEN environment variable
+//   3) User Secrets (Slack:Token)
+//   4) appsettings.json (Slack:Token)
 //
 // Notes:
-// - This is intentionally dependency-free (no NuGet packages).
 // - It calls Slack Web API endpoints over HTTPS.
 // - For files, Slack requires the Bearer token header on the file URL download request.
 
 using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using SlackChannelExportMessages.Commands;
+using SlackChannelExportMessages.Configuration;
+using SlackChannelExportMessages.Services;
 
-static class Cli
+var builder = Host.CreateApplicationBuilder(args);
+
+// Configuration
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddUserSecrets<Program>()
+    .AddEnvironmentVariables(prefix: "SLACK_");
+
+builder.Services.Configure<SlackOptions>(builder.Configuration.GetSection(SlackOptions.SectionName));
+
+// Logging
+builder.Services.AddLogging(logging =>
 {
-    public static int Main(string[] args)
+    logging.ClearProviders();
+    logging.AddSimpleConsole(options =>
     {
-        return MainAsync(args).GetAwaiter().GetResult();
+        options.IncludeScopes = false;
+        options.SingleLine = true;
+        options.TimestampFormat = "";
+    });
+    logging.SetMinimumLevel(LogLevel.Information);
+});
+
+// Services
+builder.Services.AddHttpClient<ISlackApiClient, SlackApiClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<SlackOptions>>().Value;
+    
+    // Get token from options, command line, or environment variable
+    var token = options.Token ?? Environment.GetEnvironmentVariable("SLACK_TOKEN");
+    if (!string.IsNullOrWhiteSpace(token))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
+});
 
-    private static async Task<int> MainAsync(string[] args)
-    {
-        var opts = ParseArgs(args);
+builder.Services.AddSingleton<IFileDownloadService, FileDownloadService>();
 
-        if (opts.ShowHelp)
+// Commands
+builder.Services.AddTransient<AuthTestCommand.Handler>();
+builder.Services.AddTransient<ChannelInfoCommand.Handler>();
+builder.Services.AddTransient<ListChannelsCommand.Handler>();
+builder.Services.AddTransient<DownloadFileCommand.Handler>();
+
+var host = builder.Build();
+
+// Simple command line parser (avoiding System.CommandLine 2.0 API complexity)
+var commandName = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : null;
+var token = GetArg(args, "--token") ?? Environment.GetEnvironmentVariable("SLACK_TOKEN");
+
+if (string.IsNullOrWhiteSpace(token))
+{
+    Console.Error.WriteLine("Missing token. Provide --token <xoxp|xoxb> or set SLACK_TOKEN environment variable.");
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("Usage: dotnet run -- <command> --token <token> [options]");
+    Console.Error.WriteLine("Commands: auth-test, channel-info, list-channels, download-file");
+    Console.Error.WriteLine("Use --help for more information.");
+    return 2;
+}
+
+// Update HttpClient with token
+var httpClient = host.Services.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SlackApiClient));
+httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+// Route to command handlers
+switch (commandName?.ToLowerInvariant())
+{
+    case "auth-test":
         {
-            PrintHelp();
-            return 0;
+            var handler = host.Services.GetRequiredService<AuthTestCommand.Handler>();
+            return await handler.InvokeAsync();
         }
-
-        var token = !string.IsNullOrWhiteSpace(opts.Token)
-            ? opts.Token
-            : Environment.GetEnvironmentVariable("SLACK_TOKEN");
-
-        if (string.IsNullOrWhiteSpace(token))
+    
+    case "channel-info":
         {
-            Console.Error.WriteLine("Missing token. Provide --token <xoxp|xoxb> or set SLACK_TOKEN env var.");
-            Console.Error.WriteLine();
-            PrintHelp();
-            return 2;
-        }
-
-        using var http = new HttpClient();
-        http.Timeout = TimeSpan.FromSeconds(60);
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("SlackAuthTestCLI/1.0 (+https://chatgpt.com)");
-
-        Console.WriteLine("== Slack Auth Test ==");
-        var auth = await SlackApi.CallAsync(http, "auth.test", new Dictionary<string, string?>());
-        SlackApi.AssertOk(auth, "auth.test");
-        Console.WriteLine($"ok: true");
-        Console.WriteLine($"team_id: {auth.GetStringOrNull("team_id")}");
-        Console.WriteLine($"team: {auth.GetStringOrNull("team")}");
-        Console.WriteLine($"user_id: {auth.GetStringOrNull("user_id")}");
-        Console.WriteLine($"user: {auth.GetStringOrNull("user")}");
-        Console.WriteLine($"url: {auth.GetStringOrNull("url")}");
-        Console.WriteLine();
-
-        // Optional: fetch channel info (verifies scopes and membership rules).
-        if (!string.IsNullOrWhiteSpace(opts.ChannelId))
-        {
-            Console.WriteLine("== Channel Info ==");
-            var channelInfo = await SlackApi.CallAsync(http, "conversations.info",
-                new Dictionary<string, string?> { ["channel"] = opts.ChannelId });
-            SlackApi.AssertOk(channelInfo, "conversations.info");
-            var channel = channelInfo.GetPropertyOrNull("channel");
-            Console.WriteLine($"channel_id: {opts.ChannelId}");
-            Console.WriteLine($"name: {channel?.GetStringOrNull("name")}");
-            Console.WriteLine($"is_private: {channel?.GetBoolOrNull("is_private")}");
-            Console.WriteLine($"is_member: {channel?.GetBoolOrNull("is_member")}");
-            Console.WriteLine();
-        }
-
-        // Optional: list a few channels (useful to validate channels:read / groups:read)
-        if (opts.ListChannels)
-        {
-            Console.WriteLine("== conversations.list (first page) ==");
-            var list = await SlackApi.CallAsync(http, "conversations.list",
-                new Dictionary<string, string?>
-                {
-                    ["exclude_archived"] = "true",
-                    ["limit"] = "20",
-                    // include both public and private. Slack may omit private unless your token has groups:read and user is a member.
-                    ["types"] = "public_channel,private_channel"
-                });
-            SlackApi.AssertOk(list, "conversations.list");
-            var chans = list.GetPropertyOrNull("channels");
-            if (chans is JsonElement { ValueKind: JsonValueKind.Array } arr)
+            var channel = GetArg(args, "--channel");
+            if (string.IsNullOrWhiteSpace(channel))
             {
-                foreach (var c in arr.EnumerateArray())
-                {
-                    var id = c.GetStringOrNull("id");
-                    var name = c.GetStringOrNull("name");
-                    var isPrivate = c.GetBoolOrNull("is_private");
-                    Console.WriteLine($"{id}  {(isPrivate == true ? "(private)" : "(public) ")}  {name}");
-                }
-            }
-            Console.WriteLine();
-        }
-
-        // Optional: download one file by file ID, then save to disk.
-        if (!string.IsNullOrWhiteSpace(opts.DownloadFileId))
-        {
-            if (string.IsNullOrWhiteSpace(opts.OutputDir))
-            {
-                Console.Error.WriteLine("When using --download-file, you must also provide --out <directory>.");
+                Console.Error.WriteLine("Error: --channel is required for channel-info command");
                 return 2;
             }
-
-            Console.WriteLine("== files.info ==");
-            var fileInfo = await SlackApi.CallAsync(http, "files.info",
-                new Dictionary<string, string?> { ["file"] = opts.DownloadFileId });
-            SlackApi.AssertOk(fileInfo, "files.info");
-
-            var file = fileInfo.GetPropertyOrNull("file");
-            var name = file?.GetStringOrNull("name") ?? opts.DownloadFileId;
-            var url = file?.GetStringOrNull("url_private_download") ?? file?.GetStringOrNull("url_private");
-
-            if (string.IsNullOrWhiteSpace(url))
-            {
-                Console.Error.WriteLine("Could not find url_private/url_private_download on the file object. Check token scopes (files:read).");
-                return 3;
-            }
-
-            Directory.CreateDirectory(opts.OutputDir!);
-            var outPath = Path.Combine(opts.OutputDir!, SanitizeFileName(name));
-
-            Console.WriteLine($"Downloading: {name}");
-            Console.WriteLine($"To: {outPath}");
-
-            // IMPORTANT: Slack file URLs require the same Authorization Bearer header.
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-            resp.EnsureSuccessStatusCode();
-
-            await using var fs = File.Create(outPath);
-            await resp.Content.CopyToAsync(fs);
-
-            Console.WriteLine("Download complete.");
-            Console.WriteLine();
+            var handler = host.Services.GetRequiredService<ChannelInfoCommand.Handler>();
+            handler.Channel = channel;
+            return await handler.InvokeAsync();
         }
-
-        Console.WriteLine("Done.");
-        return 0;
-    }
-
-    private static string SanitizeFileName(string fileName)
-    {
-        foreach (var c in Path.GetInvalidFileNameChars())
-            fileName = fileName.Replace(c, '_');
-        return fileName;
-    }
-
-    private static void PrintHelp()
-    {
-        Console.WriteLine("Slack Auth Test CLI (.NET 10 / C# 14) - single-file Program.cs");
-        Console.WriteLine();
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run -- [options]");
-        Console.WriteLine();
-        Console.WriteLine("Options:");
-        Console.WriteLine("  --token <token>           Slack token (xoxp- user token or xoxb- bot token).");
-        Console.WriteLine("  --channel <channelId>     Optional: call conversations.info for the channel.");
-        Console.WriteLine("  --list-channels           Optional: call conversations.list (first page).");
-        Console.WriteLine("  --download-file <fileId>  Optional: call files.info then download the file.");
-        Console.WriteLine("  --out <dir>               Required with --download-file: output directory.");
-        Console.WriteLine("  --help                    Show help.");
-        Console.WriteLine();
-        Console.WriteLine("Environment variable alternative:");
-        Console.WriteLine("  SLACK_TOKEN=<token>");
-        Console.WriteLine();
-        Console.WriteLine("Common API errors and fixes:");
-        Console.WriteLine("  - not_authed / invalid_auth: token missing/invalid.");
-        Console.WriteLine("  - missing_scope: add the required scope to your app + reinstall.");
-        Console.WriteLine("  - channel_not_found / not_in_channel: for private channels, user must be a member (user token) or bot must be invited (bot token).");
-    }
-
-    private sealed record Options(
-        bool ShowHelp,
-        string? Token,
-        string? ChannelId,
-        bool ListChannels,
-        string? DownloadFileId,
-        string? OutputDir
-    );
-
-    private static Options ParseArgs(string[] args)
-    {
-        string? token = null;
-        string? channel = null;
-        bool listChannels = false;
-        string? downloadFile = null;
-        string? outDir = null;
-        bool help = false;
-
-        for (int i = 0; i < args.Length; i++)
+    
+    case "list-channels":
         {
-            var a = args[i];
-
-            string? NextValue()
-            {
-                if (i + 1 >= args.Length)
-                    return null;
-                i++;
-                return args[i];
-            }
-
-            switch (a)
-            {
-                case "-h":
-                case "--help":
-                    help = true;
-                    break;
-
-                case "--token":
-                    token = NextValue();
-                    break;
-
-                case "--channel":
-                    channel = NextValue();
-                    break;
-
-                case "--list-channels":
-                    listChannels = true;
-                    break;
-
-                case "--download-file":
-                    downloadFile = NextValue();
-                    break;
-
-                case "--out":
-                    outDir = NextValue();
-                    break;
-
-                default:
-                    // allow --token=... style
-                    if (a.StartsWith("--token=", StringComparison.OrdinalIgnoreCase))
-                        token = a.Substring("--token=".Length);
-                    else if (a.StartsWith("--channel=", StringComparison.OrdinalIgnoreCase))
-                        channel = a.Substring("--channel=".Length);
-                    else if (a.StartsWith("--download-file=", StringComparison.OrdinalIgnoreCase))
-                        downloadFile = a.Substring("--download-file=".Length);
-                    else if (a.StartsWith("--out=", StringComparison.OrdinalIgnoreCase))
-                        outDir = a.Substring("--out=".Length);
-                    else
-                        Console.Error.WriteLine($"Unknown argument: {a}");
-                    break;
-            }
+            var limitStr = GetArg(args, "--limit");
+            var limit = int.TryParse(limitStr, out var l) ? l : 20;
+            var handler = host.Services.GetRequiredService<ListChannelsCommand.Handler>();
+            handler.Limit = limit;
+            return await handler.InvokeAsync();
         }
-
-        return new Options(help, token, channel, listChannels, downloadFile, outDir);
-    }
+    
+    case "download-file":
+        {
+            var fileId = args.Length > 1 && !args[1].StartsWith("--") ? args[1] : null;
+            var outDir = GetArg(args, "--out");
+            
+            if (string.IsNullOrWhiteSpace(fileId))
+            {
+                Console.Error.WriteLine("Error: file-id argument is required for download-file command");
+                return 2;
+            }
+            if (string.IsNullOrWhiteSpace(outDir))
+            {
+                Console.Error.WriteLine("Error: --out is required for download-file command");
+                return 2;
+            }
+            
+            var handler = host.Services.GetRequiredService<DownloadFileCommand.Handler>();
+            handler.FileId = fileId;
+            handler.Out = outDir;
+            return await handler.InvokeAsync();
+        }
+    
+    default:
+        Console.Error.WriteLine($"Unknown command: {commandName ?? "(none)"}");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Available commands:");
+        Console.Error.WriteLine("  auth-test           Test Slack authentication");
+        Console.Error.WriteLine("  channel-info        Get channel information");
+        Console.Error.WriteLine("  list-channels       List channels");
+        Console.Error.WriteLine("  download-file       Download a file");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Global options:");
+        Console.Error.WriteLine("  --token <token>     Slack API token (or set SLACK_TOKEN environment variable)");
+        return 2;
 }
 
-static class SlackApi
+static string? GetArg(string[] args, string name)
 {
-    private static readonly Uri BaseUri = new("https://slack.com/api/");
-
-    public static async Task<JsonElement> CallAsync(HttpClient http, string method, Dictionary<string, string?> formFields)
+    for (int i = 0; i < args.Length; i++)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseUri, method));
-
-        // Slack Web API accepts application/x-www-form-urlencoded for many methods (simple + reliable).
-        var pairs = formFields
-            .Where(kv => kv.Value is not null)
-            .Select(kv => new KeyValuePair<string, string>(kv.Key, kv.Value!));
-
-        req.Content = new FormUrlEncodedContent(pairs);
-
-        using var resp = await http.SendAsync(req);
-        var body = await resp.Content.ReadAsStringAsync();
-
-        // Slack returns JSON even on many errors; non-2xx can still have details.
-        // If HTTP isn't success, we still try to parse to show Slack error.
-        JsonDocument? doc = null;
-        try
-        {
-            doc = JsonDocument.Parse(body);
-        }
-        catch
-        {
-            throw new InvalidOperationException($"Slack API call {method} returned non-JSON response:\nHTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
-        }
-
-        var root = doc.RootElement.Clone();
-        doc.Dispose();
-
-        // If HTTP error, surface it but include Slack error field if present.
-        if (!resp.IsSuccessStatusCode)
-        {
-            var err = root.GetStringOrNull("error");
-            throw new InvalidOperationException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} calling {method}. Slack error: {err ?? "(none)"}");
-        }
-
-        return root;
+        if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            return args[i + 1];
+        if (args[i].StartsWith($"{name}=", StringComparison.OrdinalIgnoreCase))
+            return args[i].Substring(name.Length + 1);
     }
-
-    public static void AssertOk(JsonElement root, string methodName)
-    {
-        var ok = root.GetBoolOrNull("ok");
-        if (ok == true) return;
-
-        var err = root.GetStringOrNull("error") ?? "unknown_error";
-        var needed = root.GetStringOrNull("needed");
-        var provided = root.GetStringOrNull("provided");
-        var warning = root.GetStringOrNull("warning");
-
-        var sb = new StringBuilder();
-        sb.AppendLine($"Slack API call failed: {methodName}");
-        sb.AppendLine($"error: {err}");
-        if (!string.IsNullOrWhiteSpace(needed)) sb.AppendLine($"needed: {needed}");
-        if (!string.IsNullOrWhiteSpace(provided)) sb.AppendLine($"provided: {provided}");
-        if (!string.IsNullOrWhiteSpace(warning)) sb.AppendLine($"warning: {warning}");
-
-        throw new InvalidOperationException(sb.ToString());
-    }
-}
-
-static class JsonExtensions
-{
-    public static JsonElement? GetPropertyOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        return element.TryGetProperty(propertyName, out var prop) ? prop : (JsonElement?)null;
-    }
-
-    public static string? GetStringOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var prop)) return null;
-        return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
-    }
-
-    public static bool? GetBoolOrNull(this JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var prop)) return null;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
+    return null;
 }
