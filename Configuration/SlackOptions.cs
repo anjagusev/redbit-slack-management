@@ -69,4 +69,14 @@ public class SlackOptions
     /// If set, ngrok will be started automatically during login.
     /// </summary>
     public string? NgrokDomain { get; set; }
+
+    /// <summary>
+    /// Gets the base URL for the local OAuth callback listener.
+    /// </summary>
+    public string GetCallbackBaseUrl() => $"https://localhost:{CallbackPort}/";
+
+    /// <summary>
+    /// Gets the redirect URI for OAuth authorization.
+    /// </summary>
+    public string GetCallbackRedirectUri() => $"{GetCallbackBaseUrl()}callback";
 }

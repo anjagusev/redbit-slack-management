@@ -34,7 +34,7 @@ public class OAuthCallbackListener : IDisposable
         string expectedState,
         CancellationToken cancellationToken = default)
     {
-        var prefix = $"http://localhost:{_options.CallbackPort}/";
+        var prefix = _options.GetCallbackBaseUrl();
         _listener.Prefixes.Add(prefix);
 
         try

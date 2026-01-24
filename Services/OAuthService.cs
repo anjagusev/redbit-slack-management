@@ -75,7 +75,7 @@ public class OAuthService
         if (string.IsNullOrWhiteSpace(_options.ClientId))
             throw new InvalidOperationException("ClientId is not configured");
 
-        var redirectUri = redirectUriOverride ?? $"http://localhost:{_options.CallbackPort}/callback";
+        var redirectUri = redirectUriOverride ?? _options.GetCallbackRedirectUri();
         var scopes = string.Join(",", _options.Scopes);
 
         var url = new StringBuilder("https://slack.com/oauth/v2/authorize?");
@@ -108,7 +108,7 @@ public class OAuthService
         if (string.IsNullOrWhiteSpace(_options.ClientSecret))
             throw new InvalidOperationException("ClientSecret is not configured");
 
-        var redirectUri = redirectUriOverride ?? $"http://localhost:{_options.CallbackPort}/callback";
+        var redirectUri = redirectUriOverride ?? _options.GetCallbackRedirectUri();
 
         var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
