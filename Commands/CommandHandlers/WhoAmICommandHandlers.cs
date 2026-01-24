@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SlackChannelExportMessages.Configuration;
-using SlackChannelExportMessages.Models;
-using SlackChannelExportMessages.Services;
-using SlackChannelExportMessages.Services.TokenStorage;
+using RedBit.Slack.Management.Configuration;
+using RedBit.Slack.Management.Models;
+using RedBit.Slack.Management.Services;
+using RedBit.Slack.Management.Services.TokenStorage;
 
-namespace SlackChannelExportMessages.Commands.CommandHandlers;
+namespace RedBit.Slack.Management.Commands.CommandHandlers;
 
 public class WhoAmICommandHandler(
         FileTokenStore tokenStore,

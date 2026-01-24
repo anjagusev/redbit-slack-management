@@ -1,4 +1,4 @@
-# Slack Channel Export Messages
+# RedBit Slack Management
 
 A .NET CLI tool for interacting with the Slack API to test authentication, list channels, retrieve channel information, and download files.
 
@@ -22,7 +22,7 @@ A .NET CLI tool for interacting with the Slack API to test authentication, list 
 
 ```bash
 git clone <repository-url>
-cd slack-channel-export-messages
+cd RedBit.Slack.Management
 ```
 
 ### 2. Configure Slack App OAuth
@@ -211,7 +211,7 @@ fi
 ## Project Structure
 
 ```
-slack-channel-export-messages/
+RedBit.Slack.Management/
 ├── Commands/
 │   ├── AuthTestCommand.cs          # Authentication testing command handler
 │   ├── ChannelInfoCommand.cs       # Channel information retrieval
@@ -240,7 +240,7 @@ slack-channel-export-messages/
 │       └── StoredToken.cs          # Token storage model
 ├── appsettings.json                # Application configuration
 ├── Program.cs                      # Application entry point with System.CommandLine setup
-└── slack-channel-export-messages.csproj
+└── RedBit.Slack.Management.csproj
 ```
 
 ## Architecture

@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using SlackChannelExportMessages.Commands.CommandHandlers;
+using RedBit.Slack.Management.Commands.CommandHandlers;
 using System.CommandLine;
 
-namespace SlackChannelExportMessages.Commands;
+namespace RedBit.Slack.Management.Commands;
 
 public class ChannelsCommandInfo : BaseCommand
 {

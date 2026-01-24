@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using SlackChannelExportMessages.Services.TokenStorage;
+using RedBit.Slack.Management.Services.TokenStorage;
 using System.CommandLine;
 
-namespace SlackChannelExportMessages.Commands;
+namespace RedBit.Slack.Management.Commands;
 
 /// <summary>
 /// Base class for commands that check for token and saves the service provider

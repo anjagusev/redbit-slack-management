@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
-namespace SlackChannelExportMessages.Services.TokenStorage;
+namespace RedBit.Slack.Management.Services.TokenStorage;
 
 /// <summary>
 /// Token store that persists tokens to ~/.slack-cli/credentials.json.

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SlackChannelExportMessages.Models;
+namespace RedBit.Slack.Management.Models;
 
 /// <summary>
 /// Authenticated user information from OAuth response.

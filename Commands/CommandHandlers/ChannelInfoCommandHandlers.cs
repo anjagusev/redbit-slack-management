@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using SlackChannelExportMessages.Models;
-using SlackChannelExportMessages.Services;
+using RedBit.Slack.Management.Models;
+using RedBit.Slack.Management.Services;
 
-namespace SlackChannelExportMessages.Commands.CommandHandlers;
+namespace RedBit.Slack.Management.Commands.CommandHandlers;
 
 public class ChannelInfoCommandHandler(SlackApiClient slackClient, ILogger<ChannelInfoCommandHandler> logger)
 {

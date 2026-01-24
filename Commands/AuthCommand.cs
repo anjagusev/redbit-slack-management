@@ -1,4 +1,4 @@
-﻿namespace SlackChannelExportMessages.Commands;
+﻿namespace RedBit.Slack.Management.Commands;
 
 public class AuthCommand : BaseCommand
 {

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace SlackChannelExportMessages.Configuration;
+namespace RedBit.Slack.Management.Configuration;
 
 public class SlackOptions
 {

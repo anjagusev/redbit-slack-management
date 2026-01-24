@@ -1,4 +1,4 @@
-# Copilot Instructions for Slack Channel Export Messages
+# Copilot Instructions for RedBit Slack Management
 
 ## Project Overview
 
@@ -214,7 +214,7 @@ dotnet run -- channels --help
 
 ## Project Conventions
 
-- **Namespace**: `SlackChannelExportMessages` (not `slack_channel_export_messages`)
+- **Namespace**: `RedBit.Slack.Management`
 - **Models**: Immutable records with positional parameters ([SlackChannel.cs](Models/SlackChannel.cs), etc.)
 - **Logging**: Use `ILogger` with structured logging: `_logger.LogInformation("Message with {PropertyName}", value)`
 - **Nullable**: Enabled project-wide - use `?` for nullable references

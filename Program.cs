@@ -25,11 +25,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using SlackChannelExportMessages.Commands;
-using SlackChannelExportMessages.Commands.CommandHandlers;
-using SlackChannelExportMessages.Configuration;
-using SlackChannelExportMessages.Services;
-using SlackChannelExportMessages.Services.TokenStorage;
+using RedBit.Slack.Management.Commands;
+using RedBit.Slack.Management.Commands.CommandHandlers;
+using RedBit.Slack.Management.Configuration;
+using RedBit.Slack.Management.Services;
+using RedBit.Slack.Management.Services.TokenStorage;
 
 // Build host with DI configuration
 var builder = Host.CreateApplicationBuilder(args);

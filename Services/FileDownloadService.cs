@@ -1,4 +1,4 @@
-namespace SlackChannelExportMessages.Services;
+namespace RedBit.Slack.Management.Services;
 
 public class FileDownloadService
 {

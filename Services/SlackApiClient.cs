@@ -2,10 +2,10 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SlackChannelExportMessages.Configuration;
-using SlackChannelExportMessages.Models;
+using RedBit.Slack.Management.Configuration;
+using RedBit.Slack.Management.Models;
 
-namespace SlackChannelExportMessages.Services;
+namespace RedBit.Slack.Management.Services;
 
 public class SlackApiClient
 {

@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SlackChannelExportMessages.Configuration;
+using RedBit.Slack.Management.Configuration;
 
-namespace SlackChannelExportMessages.Services;
+namespace RedBit.Slack.Management.Services;
 
 /// <summary>
 /// Local HTTPS server using Kestrel that listens for OAuth callbacks from Slack.

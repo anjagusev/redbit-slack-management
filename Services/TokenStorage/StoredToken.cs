@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SlackChannelExportMessages.Services.TokenStorage;
+namespace RedBit.Slack.Management.Services.TokenStorage;
 
 /// <summary>
 /// Record type for persisted OAuth token data.

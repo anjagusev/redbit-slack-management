@@ -1,4 +1,4 @@
-namespace SlackChannelExportMessages.Models;
+namespace RedBit.Slack.Management.Models;
 
 public record SlackFile(
     string Id,

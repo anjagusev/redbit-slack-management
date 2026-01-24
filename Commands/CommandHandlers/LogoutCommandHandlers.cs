@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using SlackChannelExportMessages.Services.TokenStorage;
+using RedBit.Slack.Management.Services.TokenStorage;
 
-namespace SlackChannelExportMessages.Commands.CommandHandlers;
+namespace RedBit.Slack.Management.Commands.CommandHandlers;
 
 public class LogoutCommandHandler(FileTokenStore tokenStore, ILogger<LogoutCommandHandler> logger)
 {
