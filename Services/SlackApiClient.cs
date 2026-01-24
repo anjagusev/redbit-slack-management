@@ -8,7 +8,7 @@ using SlackChannelExportMessages.Models;
 
 namespace SlackChannelExportMessages.Services;
 
-public class SlackApiClient : ISlackApiClient
+public class SlackApiClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<SlackApiClient> _logger;

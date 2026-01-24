@@ -10,11 +10,11 @@ public class DownloadFileCommand
         public string FileId { get; set; } = string.Empty;
         public string Out { get; set; } = string.Empty;
 
-        private readonly ISlackApiClient _slackClient;
-        private readonly IFileDownloadService _fileService;
+        private readonly SlackApiClient _slackClient;
+        private readonly FileDownloadService _fileService;
         private readonly ILogger<Handler> _logger;
 
-        public Handler(ISlackApiClient slackClient, IFileDownloadService fileService, ILogger<Handler> logger)
+        public Handler(SlackApiClient slackClient, FileDownloadService fileService, ILogger<Handler> logger)
         {
             _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
             _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));

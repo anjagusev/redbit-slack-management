@@ -1,6 +1,6 @@
 namespace SlackChannelExportMessages.Services;
 
-public class FileDownloadService : IFileDownloadService
+public class FileDownloadService
 {
     public string SanitizeFileName(string fileName)
     {

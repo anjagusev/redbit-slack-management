@@ -7,10 +7,10 @@ public class AuthTestCommand
 {
     public class Handler
     {
-        private readonly ISlackApiClient _slackClient;
+        private readonly SlackApiClient _slackClient;
         private readonly ILogger<Handler> _logger;
 
-        public Handler(ISlackApiClient slackClient, ILogger<Handler> logger)
+        public Handler(SlackApiClient slackClient, ILogger<Handler> logger)
         {
             _slackClient = slackClient ?? throw new ArgumentNullException(nameof(slackClient));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

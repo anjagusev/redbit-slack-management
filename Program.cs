@@ -51,7 +51,7 @@ builder.Services.AddLogging(logging =>
 });
 
 // Services
-builder.Services.AddHttpClient<ISlackApiClient, SlackApiClient>((sp, client) =>
+builder.Services.AddHttpClient<SlackApiClient>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<SlackOptions>>().Value;
     
@@ -63,7 +63,7 @@ builder.Services.AddHttpClient<ISlackApiClient, SlackApiClient>((sp, client) =>
     }
 });
 
-builder.Services.AddSingleton<IFileDownloadService, FileDownloadService>();
+builder.Services.AddSingleton<FileDownloadService>();
 
 // Commands
 builder.Services.AddTransient<AuthTestCommand.Handler>();

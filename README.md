@@ -157,9 +157,7 @@ slack-channel-export-messages/
 │   ├── SlackChannel.cs             # Channel data model
 │   └── SlackFile.cs                # File metadata model
 ├── Services/
-│   ├── ISlackApiClient.cs          # Slack API client interface
 │   ├── SlackApiClient.cs           # Slack API client implementation
-│   ├── IFileDownloadService.cs     # File download service interface
 │   └── FileDownloadService.cs      # File download implementation
 ├── appsettings.json                # Application configuration
 ├── Program.cs                      # Application entry point
@@ -171,14 +169,13 @@ slack-channel-export-messages/
 The application follows a clean, layered architecture with clear separation of concerns:
 
 - **Commands**: Command handlers that orchestrate the execution of each CLI command
-- **Services**: Business logic and API communication (SlackApiClient, FileDownloadService)
+- **Services**: Business logic and API communication (`SlackApiClient`, `FileDownloadService`)
 - **Models**: Strongly-typed domain models for Slack entities
 - **Configuration**: Typed configuration with validation
 
 ### Key Design Principles
 
 - **Dependency Injection**: All components are registered in the DI container for proper lifecycle management
-- **Interface-based Design**: Services implement interfaces for testability and flexibility
 - **Typed Configuration**: `IOptions<SlackOptions>` provides strongly-typed access to settings
 - **Structured Logging**: `ILogger` for consistent, structured log output
 - **HttpClient Factory**: Proper HttpClient management to avoid socket exhaustion
@@ -236,7 +233,7 @@ The compiled executable will be in `bin/Release/net10.0/<runtime>/publish/`.
 Contributions are welcome! The architecture makes it easy to:
 
 1. **Add new commands**: Create a new handler in the `Commands/` folder
-2. **Extend the API client**: Add new methods to `ISlackApiClient` and `SlackApiClient`
+2. **Extend the API client**: Add new methods to `SlackApiClient`
 3. **Add new models**: Create strongly-typed models in the `Models/` folder
 4. **Improve error handling**: Enhance `SlackApiException` or add new exception types
 
