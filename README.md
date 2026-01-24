@@ -152,6 +152,26 @@ Retrieve detailed information about a specific channel:
 dotnet run -- channels info --channel C0123456789
 ```
 
+#### Find Channels
+
+Find channels by name using partial or exact matching:
+
+```bash
+# Partial match (case-insensitive)
+dotnet run -- channels find --name general
+
+# Exact match
+dotnet run -- channels find --name general --exact
+```
+
+#### Export Channel Messages
+
+Export all messages, threads, and files from a channel:
+
+```bash
+dotnet run -- channels export-messages --channel-id C0123456789 --output ./exports
+```
+
 ### File Commands
 
 #### Download File
@@ -173,8 +193,8 @@ The file will be saved to the specified output directory with its original filen
 | `whoami` | Show authentication status | None | None |
 | `auth test` | Test Slack API authentication | None | None |
 | `channels list` | List all channels | None | `--limit <number>` (default: 20) |
-| `channels info` | Get channel details | None | `--channel <id>` (required) |
-| `files download` | Download a file | `<file-id>` (required) | `--out <directory>` (required) |
+| `channels info` | Get channel details | None | `--channel <id>` (required) || `channels find` | Find channels by name | None | `--name <name>` (required), `--exact` (optional) |
+| `channels export-messages` | Export channel messages | None | `--channel-id <id>` (required), `--output <dir>` (required) || `files download` | Download a file | `<file-id>` (required) | `--out <directory>` (required) |
 
 ## Exit Codes
 
@@ -204,53 +224,60 @@ fi
 ## Technical Stack
 
 - **.NET 10** / C# 14
-- **System.CommandLine 2.0.0-beta4** - Modern command-line parsing with hierarchical commands
+- **System.CommandLine 2.0.2** - Modern command-line parsing with hierarchical commands
 - **Microsoft.Extensions.Hosting** 10.0.2 - Dependency injection and configuration
 - **Microsoft.Extensions.Http** 10.0.2 - HTTP client factory
 
 ## Project Structure
 
 ```
-RedBit.Slack.Management/
-├── RedBit.CommandLine/                    # Reusable OAuth library
-│   ├── RedBit.CommandLine.OAuth/          # Core OAuth library (provider-agnostic)
-│   │   ├── OAuthPkce.cs                   # PKCE utilities (state, verifier, challenge)
-│   │   ├── OAuthCallbackListener.cs       # Kestrel-based HTTPS callback server
-│   │   ├── FileTokenStore.cs              # File-based token storage
-│   │   ├── StoredToken.cs                 # Generic token model with metadata
-│   │   ├── OAuthOptions.cs                # Base OAuth configuration
-│   │   └── ServiceCollectionExtensions.cs # DI helper (AddOAuthCore)
-│   │
-│   └── RedBit.CommandLine.OAuth.Slack/    # Slack OAuth provider
-│       ├── SlackOAuthService.cs           # Slack-specific OAuth implementation
-│       ├── SlackOAuthOptions.cs           # Slack configuration
-│       ├── SlackStoredTokenExtensions.cs  # Slack metadata accessors
-│       └── ServiceCollectionExtensions.cs # DI helper (AddSlackOAuth)
+slack-channel-export-messages/
+├── RedBit.Slack.Management.csproj     # Main CLI application
+├── RedBit.CommandLine.OAuth/          # Core OAuth library (reusable)
+│   ├── OAuthPkce.cs                   # PKCE static utilities
+│   ├── OAuthCallbackListener.cs       # Kestrel-based callback server
+│   ├── FileTokenStore.cs              # File-based token storage
+│   ├── StoredToken.cs                 # Generic token model with metadata
+│   ├── OAuthOptions.cs                # Base OAuth configuration
+│   └── ServiceCollectionExtensions.cs
 │
-├── Commands/
-│   ├── AuthTestCommand.cs          # Authentication testing command handler
-│   ├── ChannelInfoCommand.cs       # Channel information retrieval
-│   ├── ListChannelsCommand.cs      # Channel listing
-│   ├── DownloadFileCommand.cs      # File download functionality
-│   ├── LoginCommand.cs             # OAuth login flow handler
-│   ├── LogoutCommand.cs            # Logout handler
-│   └── WhoAmICommand.cs            # Authentication status handler
-├── Configuration/
-│   └── SlackOptions.cs             # Strongly-typed configuration model
-├── Extensions/
-│   ├── JsonElementExtensions.cs       # Core JSON utility extensions (GetStringOrNull, etc.)
-│   └── JsonElementSlackExtensions.cs  # Slack model parsing extensions (ToSlackChannel, etc.)
-├── Models/
-│   ├── SlackApiException.cs        # Slack API error handling
-│   ├── SlackAuthResponse.cs        # Authentication response model
-│   ├── SlackChannel.cs             # Channel data model
-│   └── SlackFile.cs                # File metadata model
-├── Services/
-│   ├── SlackApiClient.cs           # Slack API client implementation
-│   └── FileDownloadService.cs      # File download implementation
-├── appsettings.json                # Application configuration
-├── Program.cs                      # Application entry point with System.CommandLine setup
-└── RedBit.Slack.Management.csproj
+├── RedBit.CommandLine.OAuth.Slack/    # Slack OAuth provider
+│   ├── SlackOAuthService.cs           # Slack-specific OAuth implementation
+│   ├── SlackOAuthOptions.cs           # Slack configuration
+│   ├── SlackStoredTokenExtensions.cs  # Slack metadata accessors
+│   └── ServiceCollectionExtensions.cs
+│
+├── RedBit.Slack.Management/           # Main application folder
+│   ├── Commands/
+│   │   ├── AuthCommand.cs                    # Auth command group
+│   │   ├── AuthCommandTest.cs                # Authentication testing
+│   │   ├── BaseCommand.cs                    # Base command class
+│   │   ├── ChannelsCommand.cs                # Channels command group
+│   │   ├── ChannelsCommandInfo.cs            # Channel information retrieval
+│   │   ├── ChannelsCommandList.cs            # Channel listing
+│   │   ├── ChannelsCommandFind.cs            # Find channels by name
+│   │   ├── ChannelsCommandExportMessages.cs  # Export channel messages
+│   │   ├── FilesCommand.cs                   # Files command group
+│   │   ├── FilesCommandDownload.cs           # File download functionality
+│   │   ├── LoginCommand.cs                   # OAuth login flow handler
+│   │   ├── LogoutCommand.cs                  # Logout handler
+│   │   ├── WhoAmICommand.cs                  # Authentication status handler
+│   │   └── CommandHandlers/                  # Command handler implementations
+│   ├── Configuration/
+│   │   └── SlackOptions.cs                # Strongly-typed configuration model
+│   ├── Extensions/
+│   │   ├── JsonElementExtensions.cs       # Core JSON utility extensions
+│   │   └── JsonElementSlackExtensions.cs  # Slack model parsing extensions
+│   ├── Models/
+│   │   ├── SlackApiException.cs           # Slack API error handling
+│   │   └── Slack/                         # Slack domain models
+│   ├── Services/
+│   │   ├── SlackApiClient.cs              # Slack API client implementation
+│   │   └── FileDownloadService.cs         # File download service
+│   ├── appsettings.json                   # Application configuration
+│   ├── ExitCode.cs                        # POSIX exit code constants
+│   ├── Program.cs                         # Entry point, DI setup, command routing
+│   └── RedBit.Slack.Management.csproj     # Project file
 ```
 
 ## Architecture
@@ -279,7 +306,7 @@ builder.Services.AddSingleton<FileDownloadService>();
 
 // OAuth services via library extension method
 builder.Services.AddSlackOAuth("slack-cli", options =>
-    builder.Configuration.GetSection("Slack").Bind(options));
+    builder.Configuration.GetSection(SlackOAuthOptions.SectionName).Bind(options));
 ```
 
 The `AddSlackOAuth` extension registers `FileTokenStore`, `OAuthCallbackListener`, and `SlackOAuthService` from the reusable OAuth library.

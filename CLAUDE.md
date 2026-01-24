@@ -41,7 +41,7 @@ No dedicated test or lint projects exist.
 
 ## Architecture Overview
 
-.NET 10 console application (C# 14) providing a CLI for Slack API operations using System.CommandLine 2.0.0-beta4.
+.NET 10 console application (C# 14) providing a CLI for Slack API operations using System.CommandLine 2.0.2.
 
 ### System.CommandLine Integration
 Uses hierarchical command structure with middleware for token validation:
@@ -175,6 +175,9 @@ OAuth functionality is provided by the `RedBit.CommandLine.OAuth` library:
 Token is injected into `HttpClient.DefaultRequestHeaders.Authorization` via DI configuration.
 Middleware validates token presence before command execution (except `login`).
 
+### HttpClient Factory Pattern
+[SlackApiClient.cs](RedBit.Slack.Management/Services/SlackApiClient.cs) receives configured HttpClient via DI. Bearer token is set in [Program.cs](RedBit.Slack.Management/Program.cs) after determining source. File downloads require token in request header (see `DownloadFileAsync`).
+
 ### Adding New Commands
 1. Create `Commands/MyCommand.cs` with nested `Handler` class
 2. Add parameters to `InvokeAsync(string param, CancellationToken ct)` method signature
@@ -215,35 +218,36 @@ extension(JsonElement element)
 
 ## Key Files
 
-- `Program.cs` - Entry point, DI setup, token resolution, command routing
-- `Services/SlackApiClient.cs` - Slack Web API wrapper
-- `Extensions/JsonElementExtensions.cs` - Core JSON utility extensions for `JsonElement`
-- `Extensions/JsonElementSlackExtensions.cs` - Slack model parsing extensions (`ToSlackChannel()`, `ToSlackMessage()`, etc.)
-- `Configuration/SlackOptions.cs` - Strongly-typed configuration model
+- [Program.cs](RedBit.Slack.Management/Program.cs) - Entry point, DI setup, token resolution, command routing
+- [Services/SlackApiClient.cs](RedBit.Slack.Management/Services/SlackApiClient.cs) - Slack Web API wrapper
+- [Extensions/JsonElementExtensions.cs](RedBit.Slack.Management/Extensions/JsonElementExtensions.cs) - Core JSON utility extensions for `JsonElement`
+- [Extensions/JsonElementSlackExtensions.cs](RedBit.Slack.Management/Extensions/JsonElementSlackExtensions.cs) - Slack model parsing extensions (`ToSlackChannel()`, `ToSlackMessage()`, etc.)
+- [Configuration/SlackOptions.cs](RedBit.Slack.Management/Configuration/SlackOptions.cs) - Strongly-typed configuration model
 
 ## Project Structure
 
 ```
 slack-channel-export-messages/
 ├── RedBit.Slack.Management.csproj     # Main CLI application
-├── RedBit.CommandLine/
-│   ├── RedBit.CommandLine.OAuth/      # Core OAuth library (reusable)
-│   │   ├── OAuthPkce.cs               # PKCE static utilities
-│   │   ├── OAuthCallbackListener.cs   # Kestrel-based callback server
-│   │   ├── FileTokenStore.cs          # File-based token storage
-│   │   ├── StoredToken.cs             # Generic token model with metadata
-│   │   ├── OAuthOptions.cs            # Base OAuth configuration
-│   │   └── ServiceCollectionExtensions.cs
-│   │
-│   └── RedBit.CommandLine.OAuth.Slack/ # Slack OAuth provider
-│       ├── SlackOAuthService.cs       # Slack-specific OAuth implementation
-│       ├── SlackOAuthOptions.cs       # Slack configuration
-│       ├── SlackStoredTokenExtensions.cs # Slack metadata accessors
-│       └── ServiceCollectionExtensions.cs
+├── RedBit.CommandLine.OAuth/          # Core OAuth library (reusable)
+│   ├── OAuthPkce.cs                   # PKCE static utilities
+│   ├── OAuthCallbackListener.cs       # Kestrel-based callback server
+│   ├── FileTokenStore.cs              # File-based token storage
+│   ├── StoredToken.cs                 # Generic token model with metadata
+│   ├── OAuthOptions.cs                # Base OAuth configuration
+│   └── ServiceCollectionExtensions.cs
 │
-├── Commands/                           # CLI commands
-├── Services/                           # Slack API services
-└── Configuration/                      # Configuration models
+├── RedBit.CommandLine.OAuth.Slack/    # Slack OAuth provider
+│   ├── SlackOAuthService.cs           # Slack-specific OAuth implementation
+│   ├── SlackOAuthOptions.cs           # Slack configuration
+│   ├── SlackStoredTokenExtensions.cs  # Slack metadata accessors
+│   └── ServiceCollectionExtensions.cs
+│
+├── RedBit.Slack.Management/           # Main application folder
+│   ├── Commands/                      # CLI command handlers
+│   ├── Services/                      # SlackApiClient, FileDownloadService
+│   ├── Models/                        # Slack domain models
+│   └── Configuration/                 # SlackOptions
 ```
 
 ### Using the OAuth Library in Other CLIs
