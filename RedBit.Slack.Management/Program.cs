@@ -1,23 +1,6 @@
 // Program.cs
 // .NET 10 / C# 14 CLI for Slack authentication and basic API operations.
-//
-// Usage examples:
-//   dotnet run -- login                              # Browser-based OAuth login
-//   dotnet run -- logout                             # Clear stored credentials
-//   dotnet run -- whoami                             # Show authentication status
-//   dotnet run -- auth test                          # Test authentication
-//   dotnet run -- channels list                      # List channels
-//   dotnet run -- channels list --limit 50           # List up to 50 channels
-//   dotnet run -- channels info --channel C0123...   # Get channel information
-//   dotnet run -- files download F0123... --out ./downloads  # Download a file
-//
-// Authentication:
-//   All commands (except 'login') require authentication via OAuth.
-//   Run 'login' first to authenticate, credentials stored in ~/.slack-cli/credentials.json
-//
-// Notes:
-// - Calls Slack Web API endpoints over HTTPS.
-// - For files, Slack requires the Bearer token header on the file URL download request.
+// See README.md for details.
 
 using System.CommandLine;
 using System.Net.Http.Headers;
