@@ -1,5 +1,5 @@
 # output of files from export
-out/*
+[Oo]ut/
 
 # Build results
 [Dd]ebug/
