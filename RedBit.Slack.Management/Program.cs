@@ -20,7 +20,8 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddUserSecrets(typeof(Program).Assembly, optional: false);
 
 builder.Services.Configure<SlackOptions>(builder.Configuration.GetSection(SlackOptions.SectionName));
 
