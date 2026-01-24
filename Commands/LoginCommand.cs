@@ -15,7 +15,6 @@ public class LoginCommand
         private readonly OAuthService _oauthService;
         private readonly OAuthCallbackListener _callbackListener;
         private readonly FileTokenStore _tokenStore;
-        private readonly NgrokService _ngrokService;
         private readonly SlackOptions _options;
         private readonly ILogger<Handler> _logger;
 
@@ -23,14 +22,12 @@ public class LoginCommand
             OAuthService oauthService,
             OAuthCallbackListener callbackListener,
             FileTokenStore tokenStore,
-            NgrokService ngrokService,
             IOptions<SlackOptions> options,
             ILogger<Handler> logger)
         {
             _oauthService = oauthService ?? throw new ArgumentNullException(nameof(oauthService));
             _callbackListener = callbackListener ?? throw new ArgumentNullException(nameof(callbackListener));
             _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-            _ngrokService = ngrokService ?? throw new ArgumentNullException(nameof(ngrokService));
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -62,14 +59,6 @@ public class LoginCommand
                         existingToken.TeamName ?? existingToken.TeamId);
                     _logger.LogWarning("Run 'logout' first to authenticate with a different account.");
                     return 1;
-                }
-
-                // Start ngrok tunnel if configured
-                if (!string.IsNullOrWhiteSpace(_options.NgrokDomain))
-                {
-                    var tunnelUrl = await _ngrokService.StartTunnelAsync(cancellationToken);
-                    redirectUriOverride = $"{tunnelUrl}/callback";
-                    _logger.LogInformation("Using ngrok tunnel: {Url}", redirectUriOverride);
                 }
 
                 // Generate security parameters
@@ -153,11 +142,6 @@ public class LoginCommand
             }
             finally
             {
-                // Always stop ngrok when OAuth completes (success, failure, or cancellation)
-                if (_ngrokService.IsRunning)
-                {
-                    await _ngrokService.StopTunnelAsync();
-                }
             }
         }
 

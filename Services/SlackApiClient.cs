@@ -26,6 +26,19 @@ public class SlackApiClient
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
     }
 
+    /// <summary>
+    /// Sets the Bearer token for API authentication.
+    /// Call this after construction when the token is resolved from stored credentials.
+    /// </summary>
+    public void SetAuthToken(string token)
+    {
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+    }
+
     public async Task<SlackAuthResponse> AuthTestAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Calling auth.test");

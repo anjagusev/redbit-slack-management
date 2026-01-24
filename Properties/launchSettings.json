@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "slack-channel-export-messages": {
+      "commandName": "Project",
+      "commandLineArgs": "login"
+    }
+  }
+}

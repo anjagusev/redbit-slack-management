@@ -37,7 +37,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
     .AddUserSecrets<Program>()
     .AddEnvironmentVariables(prefix: "SLACK_");
 
@@ -63,10 +63,6 @@ builder.Services.AddSingleton<FileTokenStore>();
 builder.Services.AddTransient<OAuthService>();
 builder.Services.AddTransient<OAuthCallbackListener>();
 builder.Services.AddHttpClient<OAuthService>();
-
-// ngrok Service (for HTTPS OAuth callbacks)
-builder.Services.AddTransient<NgrokService>();
-builder.Services.AddHttpClient<NgrokService>();
 
 // Services
 builder.Services.AddHttpClient<SlackApiClient>((sp, client) =>
@@ -153,11 +149,11 @@ if (requiresToken && string.IsNullOrWhiteSpace(token))
     return 2;
 }
 
-// Update HttpClient with token if available
+// Update SlackApiClient with resolved token
 if (!string.IsNullOrWhiteSpace(token))
 {
-    var httpClient = host.Services.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SlackApiClient));
-    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    var slackClient = host.Services.GetRequiredService<SlackApiClient>();
+    slackClient.SetAuthToken(token);
 }
 
 // Route to command handlers
