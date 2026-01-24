@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RedBit.Slack.Management.Configuration;
-using RedBit.Slack.Management.Models;
+using RedBit.Slack.Management.Models.Slack;
 using RedBit.Slack.Management.Services;
 using RedBit.Slack.Management.Services.TokenStorage;
 

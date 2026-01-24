@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RedBit.Slack.Management.Configuration;
-using RedBit.Slack.Management.Models;
+using RedBit.Slack.Management.Models.Slack;
 
 namespace RedBit.Slack.Management.Services;
 
@@ -66,12 +66,7 @@ public class SlackApiClient
         if (channel == null)
             throw new SlackApiException("Channel property not found in response");
 
-        return new SlackChannel(
-            Id: channelId,
-            Name: channel.Value.GetStringOrNull("name") ?? string.Empty,
-            IsPrivate: channel.Value.GetBoolOrNull("is_private") ?? false,
-            IsMember: channel.Value.GetBoolOrNull("is_member") ?? false
-        );
+        return ParseChannel(channel.Value);
     }
 
     public async Task<IReadOnlyList<SlackChannel>> ListChannelsAsync(int limit = 20, bool excludeArchived = true, CancellationToken cancellationToken = default)
@@ -96,12 +91,7 @@ public class SlackApiClient
             if (string.IsNullOrWhiteSpace(id))
                 continue;
 
-            result.Add(new SlackChannel(
-                Id: id,
-                Name: c.GetStringOrNull("name") ?? string.Empty,
-                IsPrivate: c.GetBoolOrNull("is_private") ?? false,
-                IsMember: c.GetBoolOrNull("is_member") ?? false
-            ));
+            result.Add(ParseChannel(c));
         }
 
         return result;
@@ -146,6 +136,113 @@ public class SlackApiClient
         await response.Content.CopyToAsync(fs, cancellationToken);
 
         _logger.LogInformation("File download complete: {OutputPath}", outputPath);
+    }
+
+    private static SlackChannel ParseChannel(JsonElement c)
+    {
+        return new SlackChannel(
+            Id: c.GetStringOrNull("id") ?? string.Empty,
+            Name: c.GetStringOrNull("name") ?? string.Empty,
+            NameNormalized: c.GetStringOrNull("name_normalized"),
+            Created: c.GetLongOrNull("created"),
+            Creator: c.GetStringOrNull("creator"),
+            Updated: c.GetLongOrNull("updated"),
+            ContextTeamId: c.GetStringOrNull("context_team_id"),
+            IsChannel: c.GetBoolOrNull("is_channel") ?? false,
+            IsGroup: c.GetBoolOrNull("is_group") ?? false,
+            IsMpim: c.GetBoolOrNull("is_mpim") ?? false,
+            IsIm: c.GetBoolOrNull("is_im") ?? false,
+            IsPrivate: c.GetBoolOrNull("is_private") ?? false,
+            IsArchived: c.GetBoolOrNull("is_archived") ?? false,
+            IsGeneral: c.GetBoolOrNull("is_general") ?? false,
+            IsShared: c.GetBoolOrNull("is_shared") ?? false,
+            IsOrgShared: c.GetBoolOrNull("is_org_shared") ?? false,
+            IsExtShared: c.GetBoolOrNull("is_ext_shared") ?? false,
+            IsPendingExtShared: c.GetBoolOrNull("is_pending_ext_shared") ?? false,
+            IsMember: c.GetBoolOrNull("is_member") ?? false,
+            NumMembers: c.GetIntOrNull("num_members"),
+            Unlinked: c.GetIntOrNull("unlinked"),
+            ParentConversation: c.GetStringOrNull("parent_conversation"),
+            Topic: ParseChannelTopic(c.GetPropertyOrNull("topic")),
+            Purpose: ParseChannelPurpose(c.GetPropertyOrNull("purpose")),
+            SharedTeamIds: c.GetStringArrayOrEmpty("shared_team_ids"),
+            PendingShared: c.GetStringArrayOrEmpty("pending_shared"),
+            PendingConnectedTeamIds: c.GetStringArrayOrEmpty("pending_connected_team_ids"),
+            PreviousNames: c.GetStringArrayOrEmpty("previous_names"),
+            Properties: ParseChannelProperties(c.GetPropertyOrNull("properties"))
+        );
+    }
+
+    private static ChannelTopic? ParseChannelTopic(JsonElement? element)
+    {
+        if (element == null) return null;
+        var e = element.Value;
+        return new ChannelTopic(
+            Value: e.GetStringOrNull("value") ?? string.Empty,
+            Creator: e.GetStringOrNull("creator"),
+            LastSet: e.GetLongOrNull("last_set")
+        );
+    }
+
+    private static ChannelPurpose? ParseChannelPurpose(JsonElement? element)
+    {
+        if (element == null) return null;
+        var e = element.Value;
+        return new ChannelPurpose(
+            Value: e.GetStringOrNull("value") ?? string.Empty,
+            Creator: e.GetStringOrNull("creator"),
+            LastSet: e.GetLongOrNull("last_set")
+        );
+    }
+
+    private static ChannelProperties? ParseChannelProperties(JsonElement? element)
+    {
+        if (element == null) return null;
+        var e = element.Value;
+        return new ChannelProperties(
+            Canvas: ParseChannelCanvas(e.GetPropertyOrNull("canvas")),
+            MeetingNotes: ParseChannelMeetingNotes(e.GetPropertyOrNull("meeting_notes")),
+            Tabs: ParseChannelTabs(e.GetPropertyOrNull("tabs"))
+        );
+    }
+
+    private static ChannelCanvas? ParseChannelCanvas(JsonElement? element)
+    {
+        if (element == null) return null;
+        var e = element.Value;
+        return new ChannelCanvas(
+            FileId: e.GetStringOrNull("file_id"),
+            IsEmpty: e.GetBoolOrNull("is_empty") ?? true,
+            QuipThreadId: e.GetStringOrNull("quip_thread_id")
+        );
+    }
+
+    private static ChannelMeetingNotes? ParseChannelMeetingNotes(JsonElement? element)
+    {
+        if (element == null) return null;
+        var e = element.Value;
+        return new ChannelMeetingNotes(
+            FileId: e.GetStringOrNull("file_id"),
+            IsEmpty: e.GetBoolOrNull("is_empty") ?? true,
+            QuipThreadId: e.GetStringOrNull("quip_thread_id")
+        );
+    }
+
+    private static ChannelTab[] ParseChannelTabs(JsonElement? element)
+    {
+        if (element == null || element.Value.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var tabs = new List<ChannelTab>();
+        foreach (var tab in element.Value.EnumerateArray())
+        {
+            tabs.Add(new ChannelTab(
+                Id: tab.GetStringOrNull("id"),
+                Label: tab.GetStringOrNull("label"),
+                Type: tab.GetStringOrNull("type")
+            ));
+        }
+        return tabs.ToArray();
     }
 
     private async Task<JsonElement> CallApiAsync(string method, Dictionary<string, string?> formFields, CancellationToken cancellationToken)
@@ -235,5 +332,37 @@ internal static class JsonExtensions
             JsonValueKind.False => false,
             _ => null
         };
+    }
+
+    public static long? GetLongOrNull(this JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        if (!element.TryGetProperty(propertyName, out var prop)) return null;
+        return prop.ValueKind == JsonValueKind.Number && prop.TryGetInt64(out var value) ? value : null;
+    }
+
+    public static int? GetIntOrNull(this JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        if (!element.TryGetProperty(propertyName, out var prop)) return null;
+        return prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value) ? value : null;
+    }
+
+    public static string[] GetStringArrayOrEmpty(this JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return [];
+        if (!element.TryGetProperty(propertyName, out var prop)) return [];
+        if (prop.ValueKind != JsonValueKind.Array) return [];
+
+        var result = new List<string>();
+        foreach (var item in prop.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                var str = item.GetString();
+                if (str != null) result.Add(str);
+            }
+        }
+        return result.ToArray();
     }
 }

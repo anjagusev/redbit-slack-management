@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using RedBit.Slack.Management.Models;
+using RedBit.Slack.Management.Models.Slack;
 using RedBit.Slack.Management.Services;
 
 namespace RedBit.Slack.Management.Commands.CommandHandlers;
@@ -21,7 +21,7 @@ public class ListChannelsCommandHandler(SlackApiClient slackClient, ILogger<List
             foreach (var channel in channels)
             {
                 var visibility = channel.IsPrivate ? "(private)" : "(public) ";
-                _logger.LogInformation("{ChannelId}  {Visibility}  {Name}", channel.Id, visibility, channel.Name);
+                _logger.LogInformation("{ChannelId}  {Visibility}  {Name} (IsArchived: {IsArchived})", channel.Id, visibility, channel.Name, channel.IsArchived);
                 await Task.Delay(1, cancellationToken); // Slight delay to improve log readability
                 count++;
             }

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using RedBit.Slack.Management.Models;
+using RedBit.Slack.Management.Models.Slack;
 using RedBit.Slack.Management.Services;
 
 namespace RedBit.Slack.Management.Commands.CommandHandlers;

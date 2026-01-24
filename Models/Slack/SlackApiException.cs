@@ -1,4 +1,4 @@
-namespace RedBit.Slack.Management.Models;
+namespace RedBit.Slack.Management.Models.Slack;
 
 public class SlackApiException : Exception
 {
