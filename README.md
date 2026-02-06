@@ -34,13 +34,21 @@ Create or configure a Slack App with OAuth capabilities:
 1. Go to [Slack API Apps](https://api.slack.com/apps)
 2. Create a new app or select an existing one
 3. Navigate to "OAuth & Permissions"
-4. Add a **Redirect URL**: `http://localhost:8765/callback` (required for OAuth flow)
+4. Add a **Redirect URL**: `https://localhost:8765/callback` (required for OAuth flow)
 5. Add **OAuth Scopes** (under "User Token Scopes"):
    - `channels:read` - List and get channel information
    - `files:read` - Access file information
    - `files:write` - Download files
 6. Navigate to "Basic Information"
 7. Copy your **Client ID** and **Client Secret**
+
+### 2b. Install SSL Certificate (macOS)
+
+For the OAuth callback to work on macOS, you need to trust the development SSL certificate:
+
+```bash
+dotnet dev-certs https --trust
+```
 
 ### 3. Configure the Application
 
